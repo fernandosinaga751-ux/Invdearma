@@ -1,10 +1,9 @@
-// src/lib/firebase.js — Pure Firebase, no localStorage
+// src/lib/firebase.js
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
   doc, getDoc, setDoc, updateDoc,
   collection, getDocs, addDoc, deleteDoc,
-  query, orderBy
 } from 'firebase/firestore';
 
 const cfg = {
@@ -18,15 +17,12 @@ const cfg = {
 
 const app = getApps().length ? getApps()[0] : initializeApp(cfg);
 const db  = getFirestore(app);
-
 export { db };
 
 // ─── SETTINGS ─────────────────────────────────────────────────
 export async function getSettings() {
-  try {
-    const s = await getDoc(doc(db, 'config', 'settings'));
-    return s.exists() ? s.data() : null;
-  } catch(e) { console.error('getSettings:', e); return null; }
+  const s = await getDoc(doc(db, 'config', 'settings'));
+  return s.exists() ? s.data() : null;
 }
 export async function saveSettings(data) {
   await setDoc(doc(db, 'config', 'settings'), data, { merge: true });
@@ -37,7 +33,7 @@ export async function getPassword() {
   try {
     const s = await getDoc(doc(db, 'config', 'auth'));
     return s.exists() ? s.data().password : 'admin1234';
-  } catch(e) { return 'admin1234'; }
+  } catch { return 'admin1234'; }
 }
 export async function savePassword(pw) {
   await setDoc(doc(db, 'config', 'auth'), { password: pw });
@@ -45,10 +41,8 @@ export async function savePassword(pw) {
 
 // ─── CUSTOMERS ────────────────────────────────────────────────
 export async function getCustomers() {
-  try {
-    const s = await getDocs(query(collection(db, 'customers'), orderBy('createdAt', 'asc')));
-    return s.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch(e) { console.error('getCustomers:', e); return []; }
+  const s = await getDocs(collection(db, 'customers'));
+  return s.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 export async function addCustomer(data) {
   const payload = { ...data, createdAt: new Date().toISOString() };
@@ -64,10 +58,8 @@ export async function deleteCustomer(id) {
 
 // ─── INVOICES ─────────────────────────────────────────────────
 export async function getInvoices() {
-  try {
-    const s = await getDocs(query(collection(db, 'invoices'), orderBy('createdAt', 'desc')));
-    return s.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch(e) { console.error('getInvoices:', e); return []; }
+  const s = await getDocs(collection(db, 'invoices'));
+  return s.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 export async function addInvoice(data) {
   const payload = { ...data, createdAt: new Date().toISOString() };
