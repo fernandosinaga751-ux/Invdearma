@@ -1,0 +1,8 @@
+const firebaseConfig = {
+  apiKey: "AIzaSyCA1_8Ir8Sj-HrzW-a2w7wTPrqghzDDWxU",
+  authDomain: "invoicedearma.firebaseapp.com",
+  projectId: "invoicedearma",
+  storageBucket: "invoicedearma.firebasestorage.app",
+  messagingSenderId: "745336351908",
+  appId: "1:745336351908:web:a3bc4745bd832e7fed0a31"
+};
