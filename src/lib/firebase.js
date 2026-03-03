@@ -1,7 +1,7 @@
 // src/lib/firebase.js
 import { initializeApp, getApps } from 'firebase/app';
 import {
-  getFirestore,
+  initializeFirestore, memoryLocalCache,
   doc, getDoc, setDoc, updateDoc,
   collection, getDocs, addDoc, deleteDoc,
 } from 'firebase/firestore';
@@ -16,13 +16,16 @@ const cfg = {
 };
 
 const app = getApps().length ? getApps()[0] : initializeApp(cfg);
-const db  = getFirestore(app);
+// Matikan offline cache → paksa baca langsung dari server Firebase
+const db = initializeFirestore(app, { localCache: memoryLocalCache() });
 export { db };
 
 // ─── SETTINGS ─────────────────────────────────────────────────
 export async function getSettings() {
-  const s = await getDoc(doc(db, 'config', 'settings'));
-  return s.exists() ? s.data() : null;
+  try {
+    const s = await getDoc(doc(db, 'config', 'settings'));
+    return s.exists() ? s.data() : null;
+  } catch(e) { console.error('getSettings:', e); return null; }
 }
 export async function saveSettings(data) {
   await setDoc(doc(db, 'config', 'settings'), data, { merge: true });
@@ -41,8 +44,10 @@ export async function savePassword(pw) {
 
 // ─── CUSTOMERS ────────────────────────────────────────────────
 export async function getCustomers() {
-  const s = await getDocs(collection(db, 'customers'));
-  return s.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const s = await getDocs(collection(db, 'customers'));
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.error('getCustomers:', e); return []; }
 }
 export async function addCustomer(data) {
   const payload = { ...data, createdAt: new Date().toISOString() };
@@ -58,8 +63,10 @@ export async function deleteCustomer(id) {
 
 // ─── INVOICES ─────────────────────────────────────────────────
 export async function getInvoices() {
-  const s = await getDocs(collection(db, 'invoices'));
-  return s.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const s = await getDocs(collection(db, 'invoices'));
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.error('getInvoices:', e); return []; }
 }
 export async function addInvoice(data) {
   const payload = { ...data, createdAt: new Date().toISOString() };
