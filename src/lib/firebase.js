@@ -28,12 +28,12 @@ async function initFirebase() {
     const fst = await import('firebase/firestore');
     _fst = fst;
     const cfg = {
-      apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId:         FB_PROJECT_ID,
-      storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+      piKey:            import.meta.env.AIzaSyCA1_8Ir8Sj-HrzW-a2w7wTPrqghzDDWxU,
+      authDomain:        import.meta.env.invoicedearma.firebaseapp.com,
+      projectId:         invoicedearma,
+      storageBucket:     import.meta.env.invoicedearma.firebasestorage.app,
+      messagingSenderId: import.meta.env.745336351908,
+      appId:             import.meta.env.1:745336351908:web:a3bc4745bd832e7fed0a31,
     };
     const app = getApps().length ? getApps()[0] : initializeApp(cfg);
     _db = fst.getFirestore(app);
