@@ -1,8 +1,6 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyCA1_8Ir8Sj-HrzW-a2w7wTPrqghzDDWxU",
-  authDomain: "invoicedearma.firebaseapp.com",
-  projectId: "invoicedearma",
-  storageBucket: "invoicedearma.firebasestorage.app",
-  messagingSenderId: "745336351908",
-  appId: "1:745336351908:web:a3bc4745bd832e7fed0a31"
-};
+VITE_FIREBASE_API_KEY AIzaSyCA1_8Ir8Sj-HrzW-a2w7wTPrqghzDDWxU
+VITE_FIREBASE_AUTH_DOMAIN invoicedearma.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID invoicedearma
+VITE_FIREBASE_STORAGE_BUCKET invoicedearma.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID 745336351908
+VITE_FIREBASE_APP_ID 1:745336351908:web:a3bc4745bd832e7fed0a31
