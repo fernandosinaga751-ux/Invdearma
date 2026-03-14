@@ -37,9 +37,21 @@ function BayarModal({ invoice, settings, onConfirm, onClose }) {
               <span className="text-slate-500">Customer</span>
               <span className="font-bold">{invoice.customerName}</span>
             </div>
+            {invoice.panjar > 0 && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Total Invoice</span>
+                  <span className="font-bold">Rp {fmt(invoice.total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">💰 Panjar / DP</span>
+                  <span className="font-bold text-amber-600">- Rp {fmt(invoice.panjar)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between items-center pt-1 border-t border-slate-200 mt-1">
-              <span className="text-slate-500 font-semibold">Total Bayar</span>
-              <span className="text-lg font-black text-emerald-600">Rp {fmt(invoice.total)}</span>
+              <span className="text-slate-500 font-semibold">{invoice.panjar > 0 ? 'Sisa Bayar' : 'Total Bayar'}</span>
+              <span className="text-lg font-black text-emerald-600">Rp {fmt(invoice.panjar > 0 ? invoice.sisa : invoice.total)}</span>
             </div>
           </div>
 
@@ -184,14 +196,29 @@ function ViewInvoice({ invoice, settings, onBack, onEdit, onDelete, onBayar }) {
 
         {/* Totals */}
         <div className="p-5 flex justify-end border-t border-slate-100">
-          <div className="w-60 space-y-1.5 text-sm">
+          <div className="w-72 space-y-1.5 text-sm">
             <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span>Rp {fmt(invoice.subtotal)}</span></div>
+            {invoice.diskon > 0 && (
+              <div className="flex justify-between text-red-500">
+                <span>🏷️ Diskon</span><span className="font-bold">- Rp {fmt(invoice.diskon)}</span>
+              </div>
+            )}
             {invoice.ppn > 0 && (
               <div className="flex justify-between"><span className="text-slate-500">PPN {invoice.ppn}%</span><span>Rp {fmt(invoice.ppnAmount)}</span></div>
             )}
             <div className="flex justify-between pt-2 border-t-2 border-[#0f2544] text-base font-black text-[#0f2544]">
               <span>TOTAL</span><span>Rp {fmt(invoice.total)}</span>
             </div>
+            {invoice.panjar > 0 && (
+              <>
+                <div className="flex justify-between text-amber-600 font-semibold">
+                  <span>💰 Panjar / DP</span><span>- Rp {fmt(invoice.panjar)}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t-2 border-emerald-500 text-base font-black text-emerald-600">
+                  <span>SISA BAYAR</span><span>Rp {fmt(invoice.sisa)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
         {invoice.notes && <div className="px-5 pb-4 text-xs text-slate-500 italic">📝 {invoice.notes}</div>}

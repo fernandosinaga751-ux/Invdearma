@@ -16,14 +16,20 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   const [ppnPct, setPpnPct]   = useState(editingInvoice?.ppn || 0);
   const [dueDate, setDueDate] = useState(editingInvoice?.dueDate || '');
   const [notes, setNotes]     = useState(editingInvoice?.notes || '');
+  const [diskon, setDiskon]   = useState(editingInvoice?.diskon || 0);
+  const [panjar, setPanjar]   = useState(editingInvoice?.panjar || 0);
   const [saving, setSaving]   = useState(false);
 
   const filtCust = customers.filter(c =>
     c.name.toLowerCase().includes(custQuery.toLowerCase())
   );
-  const subtotal = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
-  const ppnAmt   = Math.round(subtotal * ppnPct / 100);
-  const total    = subtotal + ppnAmt;
+  const subtotal       = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
+  const diskonAmt      = Math.min(Number(diskon) || 0, subtotal);
+  const subtotalAfter  = subtotal - diskonAmt;
+  const ppnAmt         = Math.round(subtotalAfter * ppnPct / 100);
+  const total          = subtotalAfter + ppnAmt;
+  const panjarAmt      = Math.min(Number(panjar) || 0, total);
+  const sisa           = total - panjarAmt;
   const previewNo = editingInvoice?.invoiceNo || genInvNo(invoices, date);
 
   const addItem    = () => setItems([...items, { id: uid(), description: '', qty: 1, price: 0 }]);
@@ -44,7 +50,8 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
         customerPhone: selCust.phone || '', customerAddress: selCust.address || '',
         date, dueDate,
         items: items.map(i => ({ ...i, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })),
-        subtotal, ppn: ppnPct, ppnAmount: ppnAmt, total,
+        subtotal, diskon: diskonAmt, ppn: ppnPct, ppnAmount: ppnAmt, total,
+        panjar: panjarAmt, sisa,
         notes,
       };
 
@@ -142,6 +149,34 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
               </div>
             </div>
             <Input label="Catatan (Opsional)" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Catatan tambahan..." />
+            
+            {/* Diskon */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                🏷️ Diskon (Rp)
+              </label>
+              <input
+                type="number" min="0"
+                value={diskon}
+                onChange={e => setDiskon(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]"
+                placeholder="0"
+              />
+            </div>
+
+            {/* Panjar */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                💰 Panjar / Uang Muka (Rp)
+              </label>
+              <input
+                type="number" min="0"
+                value={panjar}
+                onChange={e => setPanjar(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]"
+                placeholder="0"
+              />
+            </div>
           </div>
         </Card>
       </div>
@@ -194,11 +229,17 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
 
         {/* Total preview */}
         <div className="mt-5 pt-4 border-t border-slate-100 flex justify-end">
-          <div className="w-64 space-y-2 text-sm">
+          <div className="w-72 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Subtotal</span>
               <span className="font-bold">Rp {fmt(subtotal)}</span>
             </div>
+            {diskonAmt > 0 && (
+              <div className="flex justify-between text-red-500">
+                <span>🏷️ Diskon</span>
+                <span className="font-bold">- Rp {fmt(diskonAmt)}</span>
+              </div>
+            )}
             {ppnPct > 0 && (
               <div className="flex justify-between">
                 <span className="text-slate-500">PPN {ppnPct}%</span>
@@ -209,6 +250,18 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
               <span>TOTAL</span>
               <span>Rp {fmt(total)}</span>
             </div>
+            {panjarAmt > 0 && (
+              <>
+                <div className="flex justify-between text-amber-600">
+                  <span className="font-semibold">💰 Panjar / DP</span>
+                  <span className="font-bold">- Rp {fmt(panjarAmt)}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t-2 border-emerald-500 text-base font-black text-emerald-600">
+                  <span>SISA BAYAR</span>
+                  <span>Rp {fmt(sisa)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Card>

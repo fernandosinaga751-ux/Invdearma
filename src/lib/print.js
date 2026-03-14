@@ -118,8 +118,13 @@ function buildInvoiceHTML(invoice, settings) {
 
     <div class="totals"><div class="totals-box">
       <div class="t-row"><span>Subtotal</span><span>Rp ${fmt(invoice.subtotal)}</span></div>
+      ${invoice.diskon > 0 ? `<div class="t-row" style="color:#dc2626;"><span>🏷️ Diskon</span><span>- Rp ${fmt(invoice.diskon)}</span></div>` : ''}
       ${invoice.ppn > 0 ? `<div class="t-row"><span>PPN ${invoice.ppn}%</span><span>Rp ${fmt(invoice.ppnAmount)}</span></div>` : ''}
       <div class="t-row t-grand"><span>TOTAL</span><span>Rp ${fmt(invoice.total)}</span></div>
+      ${invoice.panjar > 0 ? `
+      <div class="t-row" style="color:#d97706;font-weight:700;"><span>💰 Panjar / DP</span><span>- Rp ${fmt(invoice.panjar)}</span></div>
+      <div class="t-row" style="border-top:2px solid #059669;color:#059669;font-size:14px;font-weight:800;padding-top:7px;"><span>SISA BAYAR</span><span>Rp ${fmt(invoice.sisa)}</span></div>
+      ` : ''}
     </div></div>
 
     ${invoice.notes ? `<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:11px;"><strong style="color:#b45309;">📝 Catatan:</strong> ${invoice.notes}</div>` : ''}
@@ -156,7 +161,7 @@ function buildInvoiceHTML(invoice, settings) {
 function buildKwitansiHTML(invoice, settings) {
   const co = settings.companyName || 'Dearma Rental Mobil Medan';
   const paidDate = invoice.paidDate || invoice.date;
-  const nominal = invoice.total;
+  const nominal = invoice.panjar > 0 ? (invoice.sisa || invoice.total) : invoice.total;
   const terbilangStr = terbilang(nominal);
 
   return `<!DOCTYPE html>
@@ -275,7 +280,23 @@ function buildKwitansiHTML(invoice, settings) {
       <div class="kw-row">
         <span class="kw-label">Rincian</span>
         <span class="kw-sep">:</span>
-        <span class="kw-value" style="font-size:10.5px;color:#666;">Subtotal Rp ${fmt(invoice.subtotal)} + PPN ${invoice.ppn}% Rp ${fmt(invoice.ppnAmount)}</span>
+        <span class="kw-value" style="font-size:10.5px;color:#666;">Subtotal Rp ${fmt(invoice.subtotal)}${invoice.diskon > 0 ? ` − Diskon Rp ${fmt(invoice.diskon)}` : ''} + PPN ${invoice.ppn}% Rp ${fmt(invoice.ppnAmount)}</span>
+      </div>` : (invoice.diskon > 0 ? `
+      <div class="kw-row">
+        <span class="kw-label">Diskon</span>
+        <span class="kw-sep">:</span>
+        <span class="kw-value" style="color:#dc2626;">- Rp ${fmt(invoice.diskon)}</span>
+      </div>` : '')}
+      ${invoice.panjar > 0 ? `
+      <div class="kw-row">
+        <span class="kw-label">Total Invoice</span>
+        <span class="kw-sep">:</span>
+        <span class="kw-value">Rp ${fmt(invoice.total)}</span>
+      </div>
+      <div class="kw-row">
+        <span class="kw-label">Panjar / DP</span>
+        <span class="kw-sep">:</span>
+        <span class="kw-value" style="color:#d97706;">Rp ${fmt(invoice.panjar)} (sudah dibayar)</span>
       </div>` : ''}
     </div>
 
