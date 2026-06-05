@@ -13,6 +13,7 @@ function buildInvoiceHTML(invoice, settings) {
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:210mm;overflow-x:hidden;}
   body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
   .page{width:210mm;min-height:297mm;margin:0 auto;padding:14mm 16mm;position:relative;}
   .header{display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:3px solid #0f2544;margin-bottom:18px;}
@@ -56,7 +57,11 @@ function buildInvoiceHTML(invoice, settings) {
   .sig-title{font-size:9px;color:#888;margin-top:1px;}
   .wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-size:80px;font-weight:900;color:rgba(15,37,68,.035);pointer-events:none;font-family:'Playfair Display',serif;white-space:nowrap;z-index:0;letter-spacing:8px;}
   .content{position:relative;z-index:1;}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    @page{size:A4 portrait;margin:0;}
+    .page{margin:0;width:100%;max-height:297mm;overflow:hidden;}
+  }
 </style></head>
 <body><div class="page">
   <div class="wm">INVOICE</div>
@@ -171,8 +176,9 @@ function buildKwitansiHTML(invoice, settings) {
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:210mm;height:148mm;overflow:hidden;}
   body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
-  .page{width:210mm;min-height:148mm;margin:0 auto;padding:12mm 16mm;position:relative;overflow:hidden;}
+  .page{width:210mm;height:148mm;margin:0 auto;padding:10mm 14mm;position:relative;overflow:hidden;}
   /* Watermark LUNAS */
   .wm-lunas{
     position:absolute;top:50%;left:50%;
@@ -185,7 +191,7 @@ function buildKwitansiHTML(invoice, settings) {
     z-index:0;
   }
   .content{position:relative;z-index:1;}
-  .header{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:3px solid #0f2544;margin-bottom:14px;}
+  .header{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:3px solid #0f2544;margin-bottom:10px;}
   .logo-box{width:64px;height:64px;flex-shrink:0;}
   .logo-box img{width:100%;height:100%;object-fit:contain;}
   .logo-ph{width:64px;height:64px;background:linear-gradient(135deg,#0f2544,#1e4080);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#d4a017;font-weight:900;font-size:18px;font-family:'Playfair Display',serif;}
@@ -195,8 +201,8 @@ function buildKwitansiHTML(invoice, settings) {
   .kw-title .t{font-family:'Playfair Display',serif;font-size:28px;color:#059669;font-weight:900;letter-spacing:3px;border-bottom:3px solid #059669;padding-bottom:2px;display:inline-block;}
   .kw-title .no{font-size:10px;color:#777;margin-top:4px;font-family:monospace;}
   /* Body kwitansi */
-  .kwbody{border:2px solid #0f2544;border-radius:12px;overflow:hidden;margin-bottom:14px;}
-  .kw-row{display:grid;grid-template-columns:140px 16px 1fr;align-items:start;padding:9px 14px;border-bottom:1px solid #e5e7f0;}
+  .kwbody{border:2px solid #0f2544;border-radius:12px;overflow:hidden;margin-bottom:10px;}
+  .kw-row{display:grid;grid-template-columns:140px 16px 1fr;align-items:start;padding:7px 14px;border-bottom:1px solid #e5e7f0;}
   .kw-row:last-child{border-bottom:none;}
   .kw-row.highlight{background:#f0fdf4;}
   .kw-label{font-size:10.5px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;padding-top:1px;}
@@ -223,7 +229,11 @@ function buildKwitansiHTML(invoice, settings) {
   .sig-name{border-top:1.5px solid #333;padding-top:5px;font-size:11.5px;font-weight:800;color:#0f2544;}
   .sig-title{font-size:9px;color:#888;margin-top:1px;}
   .tanggal-box{font-size:11px;color:#555;margin-bottom:6px;}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} @page{margin:0;size:A5 landscape;}}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    @page{size:A5 landscape;margin:0;}
+    .page{margin:0;width:100%;height:148mm;overflow:hidden;}
+  }
 </style></head>
 <body><div class="page">
   <div class="wm-lunas">LUNAS</div>

@@ -136,7 +136,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">PPN</label>
               <div className="flex gap-2 flex-wrap">
-                {[0, 5, 10, 11, 12].map(p => (
+                {[0, 2, 5, 10, 11, 12].map(p => (
                   <button
                     key={p}
                     onClick={() => setPpnPct(p)}
