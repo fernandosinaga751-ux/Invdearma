@@ -7,6 +7,7 @@ import Customers  from './pages/Customers.jsx';
 import NewInvoice from './pages/NewInvoice.jsx';
 import Invoices   from './pages/Invoices.jsx';
 import Settings   from './pages/Settings.jsx';
+import BlankReceipt from './pages/BlankReceipt.jsx';
 import { DEF_SETTINGS } from './lib/utils.js';
 import { getSettings, getPassword, getCustomers, getInvoices } from './lib/firebase.js';
 
@@ -108,6 +109,7 @@ export default function App() {
                                     setPage={setPage} setViewingId={setViewingId}
                                     editingInvoice={editingInvoice} setEditingInvoice={setEditingInvoice} />;
       case 'settings':    return <Settings settings={settings} setSettings={setSettings} password={password} setPassword={setPassword} />;
+      case 'blank-receipt': return <BlankReceipt settings={settings} setPage={setPage} />;
       default: return null;
     }
   };

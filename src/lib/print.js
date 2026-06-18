@@ -339,11 +339,235 @@ function buildKwitansiHTML(invoice, settings) {
 </body></html>`;
 }
 
+// ════════════════════════════════════════════════════════════════
+// KWITANSI KOSONG — Bertema (kop perusahaan otomatis)
+// ════════════════════════════════════════════════════════════════
+function buildBlankReceiptThemedHTML(settings, copies) {
+  const co = settings.companyName || 'Dearma Rental Mobil Medan';
+
+  const oneCopy = () => `
+  <div class="page">
+    <div class="content">
+      <div class="header">
+        <div class="logo-box">
+          ${settings.logo ? `<img src="${settings.logo}" alt="Logo">` : `<div class="logo-ph">DRM</div>`}
+        </div>
+        <div>
+          <div class="co-name">${co}</div>
+          <div class="co-sub">
+            ${settings.address ? settings.address + '<br>' : ''}
+            ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+          </div>
+        </div>
+        <div class="kw-title">
+          <div class="t">KWITANSI</div>
+          <div class="no">No. ____________________</div>
+        </div>
+      </div>
+
+      <div class="kwbody">
+        <div class="kw-row">
+          <span class="kw-label">Telah diterima dari</span>
+          <span class="kw-sep">:</span>
+          <span class="kw-value fill-line">&nbsp;</span>
+        </div>
+        <div class="kw-row">
+          <span class="kw-label">Tanggal Pembayaran</span>
+          <span class="kw-sep">:</span>
+          <span class="kw-value fill-line short">&nbsp;</span>
+        </div>
+        <div class="kw-row">
+          <span class="kw-label">Untuk Pembayaran</span>
+          <span class="kw-sep">:</span>
+          <span class="kw-value">
+            <div class="fill-block"></div>
+            <div class="fill-block"></div>
+          </span>
+        </div>
+        <div class="kw-row highlight">
+          <span class="kw-label">Uang Sejumlah</span>
+          <span class="kw-sep">:</span>
+          <div style="width:100%;">
+            <div class="kw-value fill-line">&nbsp;</div>
+            <div class="terbilang-box">
+              <div class="terbilang-label">Terbilang</div>
+              <div class="terbilang-val fill-line">** &nbsp; **</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>
+          ${settings.bankName || settings.bankAccount ? `
+          <p>
+            ${settings.bankName    ? `Bank &nbsp;&nbsp;&nbsp;: ${settings.bankName}<br>` : ''}
+            ${settings.bankAccount ? `No. Rek : <strong>${settings.bankAccount}</strong><br>` : ''}
+            ${settings.ownerName   ? `A/N &nbsp;&nbsp;&nbsp;&nbsp;: ${settings.ownerName}` : ''}
+          </p>` : ''}
+        </div>
+        <div class="sig-box"><div class="sig-inner">
+          <div class="tanggal-box">Medan, ____________________</div>
+          <div class="sig-from">Yang Menerima,</div>
+          <div class="sig-imgs">
+            ${settings.stamp     ? `<img src="${settings.stamp}" class="stamp-img" alt="Stempel">` : ''}
+            ${settings.signature ? `<img src="${settings.signature}" class="sign-img" alt="TTD">` : '<div style="height:55px;"></div>'}
+          </div>
+          <div class="sig-name">${settings.ownerName || 'Pimpinan'}</div>
+          <div class="sig-title">${co}</div>
+        </div></div>
+      </div>
+    </div>
+  </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="UTF-8">
+<title>KWITANSI KOSONG - ${co}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:210mm;}
+  body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
+  .page{width:210mm;height:148mm;margin:0 auto;padding:10mm 14mm;position:relative;overflow:hidden;page-break-after:always;}
+  .page:last-child{page-break-after:auto;}
+  .content{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;}
+  .header{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:3px solid #0f2544;margin-bottom:10px;}
+  .logo-box{width:64px;height:64px;flex-shrink:0;}
+  .logo-box img{width:100%;height:100%;object-fit:contain;}
+  .logo-ph{width:64px;height:64px;background:linear-gradient(135deg,#0f2544,#1e4080);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#d4a017;font-weight:900;font-size:18px;font-family:'Playfair Display',serif;}
+  .co-name{font-family:'Playfair Display',serif;font-size:18px;color:#0f2544;font-weight:900;}
+  .co-sub{color:#666;font-size:10px;margin-top:3px;line-height:1.6;}
+  .kw-title{margin-left:auto;text-align:right;}
+  .kw-title .t{font-family:'Playfair Display',serif;font-size:28px;color:#0f2544;font-weight:900;letter-spacing:3px;border-bottom:3px solid #d4a017;padding-bottom:2px;display:inline-block;}
+  .kw-title .no{font-size:10px;color:#777;margin-top:4px;font-family:monospace;}
+  .kwbody{border:2px solid #0f2544;border-radius:12px;overflow:hidden;margin-bottom:10px;flex:1;}
+  .kw-row{display:grid;grid-template-columns:140px 16px 1fr;align-items:start;padding:9px 14px;border-bottom:1px solid #e5e7f0;}
+  .kw-row:last-child{border-bottom:none;}
+  .kw-row.highlight{background:#f8fafc;}
+  .kw-label{font-size:10.5px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;padding-top:1px;}
+  .kw-sep{font-size:13px;color:#0f2544;font-weight:900;padding-top:0;}
+  .kw-value{font-size:12px;color:#1a1a2e;font-weight:600;line-height:1.5;width:100%;}
+  .fill-line{display:inline-block;width:100%;border-bottom:1.3px dotted #a8aec2;min-height:18px;}
+  .fill-line.short{width:60%;}
+  .fill-block{border-bottom:1.3px dotted #a8aec2;height:16px;margin-bottom:6px;}
+  .terbilang-box{background:#f8fafc;border:1px dashed #b8bdce;border-radius:8px;padding:8px 12px;margin-top:6px;}
+  .terbilang-label{font-size:9px;font-weight:800;color:#777;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;}
+  .terbilang-val{font-size:12px;font-weight:700;color:#555;font-style:italic;}
+  .footer{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:end;margin-top:auto;}
+  .pay p{font-size:11px;color:#444;line-height:1.9;}
+  .sig-box{text-align:center;}
+  .sig-inner{display:inline-block;min-width:160px;}
+  .sig-from{font-size:9px;color:#999;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+  .sig-imgs{height:80px;position:relative;margin-bottom:5px;display:flex;align-items:flex-end;justify-content:center;}
+  .stamp-img{position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:90px;height:90px;object-fit:contain;opacity:.4;}
+  .sign-img{height:55px;object-fit:contain;position:relative;z-index:1;}
+  .sig-name{border-top:1.5px solid #333;padding-top:5px;font-size:11.5px;font-weight:800;color:#0f2544;}
+  .sig-title{font-size:9px;color:#888;margin-top:1px;}
+  .tanggal-box{font-size:11px;color:#555;margin-bottom:6px;}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    @page{size:A5 landscape;margin:0;}
+    .page{margin:0;width:100%;height:148mm;}
+  }
+</style></head>
+<body>${Array.from({ length: copies }, oneCopy).join('')}
+<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+</body></html>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// KWITANSI KOSONG — Polos (siap tulis tangan, tanpa kop)
+// ════════════════════════════════════════════════════════════════
+function buildBlankReceiptPlainHTML(copies) {
+  const oneCopy = () => `
+  <div class="page">
+    <div class="row1">
+      <div class="title">KWITANSI</div>
+      <div class="no-box">No. <span class="line short"></span></div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Sudah terima dari</span>
+      <span class="sep">:</span>
+      <span class="line"></span>
+    </div>
+    <div class="field">
+      <span class="lbl">Banyaknya uang</span>
+      <span class="sep">:</span>
+      <span class="line"></span>
+    </div>
+    <div class="field terbilang">
+      <span class="lbl">Untuk pembayaran</span>
+      <span class="sep">:</span>
+      <div class="multiline">
+        <span class="line"></span>
+        <span class="line"></span>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="amount-box">
+        <span class="lbl">Rp</span>
+        <span class="line"></span>
+      </div>
+      <div class="sign-box">
+        <span class="line short" style="margin-bottom:2px;"></span>
+        <div class="sign-area"></div>
+        <span class="line short"></span>
+      </div>
+    </div>
+  </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="UTF-8">
+<title>KWITANSI KOSONG - Polos</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:210mm;}
+  body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;font-size:13px;}
+  .page{width:210mm;height:148mm;margin:0 auto;padding:12mm 16mm;position:relative;border:1.5px solid #333;page-break-after:always;display:flex;flex-direction:column;}
+  .page:last-child{page-break-after:auto;}
+  .row1{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:18px;}
+  .title{font-size:24px;font-weight:900;letter-spacing:4px;}
+  .no-box{font-size:12px;}
+  .field{display:grid;grid-template-columns:150px 14px 1fr;align-items:end;margin-bottom:16px;}
+  .field.terbilang{align-items:start;}
+  .lbl{font-size:13px;font-weight:700;}
+  .sep{font-size:13px;font-weight:700;}
+  .line{display:inline-block;width:100%;border-bottom:1px solid #444;min-height:20px;}
+  .multiline{display:flex;flex-direction:column;gap:18px;}
+  .bottom{display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto;gap:30px;}
+  .amount-box{display:flex;align-items:baseline;gap:8px;flex:1;border:1.5px solid #333;border-radius:6px;padding:8px 14px;}
+  .amount-box .lbl{font-size:15px;}
+  .sign-box{display:flex;flex-direction:column;align-items:center;width:180px;}
+  .sign-area{height:60px;width:100%;}
+  @media print{
+    @page{size:A5 landscape;margin:0;}
+    .page{margin:0;width:100%;height:148mm;}
+  }
+</style></head>
+<body>${Array.from({ length: copies }, oneCopy).join('')}
+<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+</body></html>`;
+}
+
 // ─── Public API ────────────────────────────────────────────────
 export function doPrint(invoice, type, settings) {
   const html = type === 'kwitansi'
     ? buildKwitansiHTML(invoice, settings)
     : buildInvoiceHTML(invoice, settings);
+  const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
+  if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+export function doPrintBlankReceipt(variant, settings, copies = 1) {
+  const html = variant === 'plain'
+    ? buildBlankReceiptPlainHTML(copies)
+    : buildBlankReceiptThemedHTML(settings, copies);
   const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
   if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
   w.document.write(html);

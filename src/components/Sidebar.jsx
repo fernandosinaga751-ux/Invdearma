@@ -5,6 +5,7 @@ const NAV = [
   { id: 'dashboard',   label: 'Dashboard',           icon: 'dash'  },
   { id: 'invoices',    label: 'Invoice & Kwitansi',   icon: 'doc'   },
   { id: 'new-invoice', label: 'Buat Invoice Baru',    icon: 'plus'  },
+  { id: 'blank-receipt', label: 'Kwitansi Kosong',    icon: 'receipt' },
   { id: 'customers',   label: 'Data Customer',        icon: 'users' },
   { id: 'settings',    label: 'Pengaturan',           icon: 'gear'  },
 ];
