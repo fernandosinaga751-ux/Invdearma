@@ -583,6 +583,195 @@ function buildBlankReceiptPlainHTML(copies) {
 </body></html>`;
 }
 
+// ════════════════════════════════════════════════════════════════
+// KARTU NAMA — Rental Mobil, 2 Sisi, Grid A4 presisi
+// Kartu 90×55mm standar, 4 kolom × 5 baris = 20 kartu / lembar A4
+// Sisi belakang di-mirror horizontal per baris agar pas saat
+// kertas dibalik dari sisi panjang (long-edge flip) untuk duplex print.
+// ════════════════════════════════════════════════════════════════
+const CARD_W = 90;  // mm
+const CARD_H = 55;  // mm
+const COLS = 4;
+const ROWS = 5;
+const PAGE_W = 210; // mm A4
+const PAGE_H = 297; // mm A4
+
+function cnGapsAndMargin() {
+  const gapX = 4, gapY = 4;
+  const gridW = COLS * CARD_W + (COLS - 1) * gapX;
+  const gridH = ROWS * CARD_H + (ROWS - 1) * gapY;
+  const marginX = (PAGE_W - gridW) / 2;
+  const marginY = (PAGE_H - gridH) / 2;
+  return { gapX, gapY, marginX, marginY };
+}
+
+function cnFrontCardHTML(data) {
+  const co = data.companyName || 'Dearma Rental Mobil Medan';
+  return `
+    <div class="cn-card cn-front">
+      <div class="cn-road"></div>
+      <div class="cn-front-top">
+        <div class="cn-logo">
+          ${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DRM</div>`}
+        </div>
+        <div class="cn-co-name">${co}</div>
+      </div>
+      <div class="cn-front-bottom">
+        <div class="cn-person-name">${data.personName || 'Nama Anda'}</div>
+        <div class="cn-person-title">${data.personTitle || 'Jabatan'}</div>
+      </div>
+      <div class="cn-gold-line"></div>
+    </div>`;
+}
+
+function cnBackCardHTML(data) {
+  const co = data.companyName || 'Dearma Rental Mobil Medan';
+  const rows = [
+    data.phone   ? { ic: '📞', v: data.phone } : null,
+    data.whatsapp? { ic: '💬', v: data.whatsapp } : null,
+    data.email   ? { ic: '✉', v: data.email } : null,
+    data.website ? { ic: '🌐', v: data.website } : null,
+    data.address ? { ic: '📍', v: data.address } : null,
+  ].filter(Boolean);
+
+  return `
+    <div class="cn-card cn-back">
+      <div class="cn-back-corner"></div>
+      <div class="cn-back-co">${co}</div>
+      <div class="cn-back-tag">${data.tagline || 'Sewa Mobil Terpercaya & Nyaman'}</div>
+      <div class="cn-back-contacts">
+        ${rows.map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function buildBusinessCardHTML(data, side) {
+  const { gapX, gapY, marginX, marginY } = cnGapsAndMargin();
+  const total = COLS * ROWS;
+
+  // depan: urutan normal kiri→kanan.
+  // belakang: urutan tiap baris dibalik (mirror horizontal) agar saat
+  // lembar dibalik dari sisi panjang kiri/kanan, posisi kartu belakang
+  // jatuh tepat menimpa kartu depan.
+  const cardsHTML = [];
+  for (let r = 0; r < ROWS; r++) {
+    const rowCards = [];
+    for (let c = 0; c < COLS; c++) {
+      rowCards.push(side === 'front' ? cnFrontCardHTML(data) : cnBackCardHTML(data));
+    }
+    if (side === 'back') rowCards.reverse();
+    cardsHTML.push(...rowCards);
+  }
+
+  const co = data.companyName || 'Dearma Rental Mobil Medan';
+
+  return `<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="UTF-8">
+<title>KARTU NAMA - ${side === 'front' ? 'Depan' : 'Belakang'} - ${co}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:210mm;}
+  body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;}
+  .cn-sheet{
+    width:${PAGE_W}mm;height:${PAGE_H}mm;position:relative;
+    display:grid;
+    grid-template-columns:repeat(${COLS}, ${CARD_W}mm);
+    grid-template-rows:repeat(${ROWS}, ${CARD_H}mm);
+    gap:${gapY}mm ${gapX}mm;
+    padding:${marginY}mm ${marginX}mm;
+  }
+  .cn-card{
+    width:${CARD_W}mm;height:${CARD_H}mm;position:relative;overflow:hidden;
+    border:0.3px dashed #cbd5e1;
+  }
+  /* ── Crop marks tiap kartu (pojok) ── */
+  .cn-card::before,.cn-card::after{content:'';position:absolute;width:3mm;height:0.25mm;background:#94a3b8;}
+  /* ── FRONT ───────────────────────────────────────────── */
+  .cn-front{
+    background:linear-gradient(135deg,#0f2544 0%,#13294f 55%,#07172e 100%);
+    color:#fff;
+  }
+  .cn-road{
+    position:absolute;left:-10%;bottom:14mm;width:120%;height:14mm;
+    border-top:1.1px solid rgba(212,160,23,.55);
+    border-radius:50%;
+    transform:rotate(-3deg);
+  }
+  .cn-gold-line{
+    position:absolute;left:0;bottom:0;width:100%;height:2.3mm;
+    background:linear-gradient(90deg,#d4a017,#f0c040);
+  }
+  .cn-front-top{
+    position:absolute;top:4.2mm;left:5mm;right:5mm;
+    display:flex;align-items:center;gap:2.4mm;
+  }
+  .cn-logo{width:8mm;height:8mm;flex-shrink:0;}
+  .cn-logo img{width:100%;height:100%;object-fit:contain;}
+  .cn-logo-ph{
+    width:8mm;height:8mm;border-radius:1.6mm;
+    background:linear-gradient(135deg,#d4a017,#f0c040);
+    display:flex;align-items:center;justify-content:center;
+    color:#0f2544;font-weight:900;font-size:2.6mm;font-family:'Playfair Display',serif;
+  }
+  .cn-co-name{
+    font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;
+    font-size:2.7mm;letter-spacing:.3mm;color:#f3f5fa;
+    text-transform:uppercase;line-height:1.2;
+  }
+  .cn-front-bottom{
+    position:absolute;left:5mm;bottom:6.6mm;right:5mm;
+  }
+  .cn-person-name{
+    font-family:'Playfair Display',serif;font-weight:900;
+    font-size:5.6mm;color:#fff;line-height:1.05;
+  }
+  .cn-person-title{
+    margin-top:1mm;font-size:2.5mm;font-weight:600;letter-spacing:.4mm;
+    color:#d4a017;text-transform:uppercase;
+  }
+  /* ── BACK ────────────────────────────────────────────── */
+  .cn-back{
+    background:#ffffff;
+  }
+  .cn-back-corner{
+    position:absolute;top:0;right:0;width:24mm;height:24mm;
+    background:linear-gradient(135deg,transparent 50%,#f4f6fb 50%);
+  }
+  .cn-back-corner::after{
+    content:'';position:absolute;top:5mm;right:5mm;width:10mm;height:10mm;
+    border-top:1.1px solid #d4a017;border-right:1.1px solid #d4a017;
+    border-radius:0 4mm 0 0;opacity:.8;
+  }
+  .cn-back-co{
+    position:absolute;top:4.4mm;left:5mm;
+    font-family:'Playfair Display',serif;font-weight:900;
+    font-size:3.6mm;color:#0f2544;line-height:1.15;max-width:60mm;
+  }
+  .cn-back-tag{
+    position:absolute;top:10.2mm;left:5mm;
+    font-size:2.1mm;color:#94a3b8;font-weight:600;letter-spacing:.2mm;
+    text-transform:uppercase;max-width:60mm;
+  }
+  .cn-back-contacts{
+    position:absolute;left:5mm;bottom:4.6mm;right:5mm;
+    display:flex;flex-direction:column;gap:1.5mm;
+  }
+  .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
+  .cn-ic{font-size:2.3mm;width:4mm;flex-shrink:0;}
+  .cn-cv{font-size:2.3mm;color:#334155;font-weight:600;word-break:break-all;}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    @page{size:A4 portrait;margin:0;}
+  }
+</style></head>
+<body>
+  <div class="cn-sheet">${cardsHTML.join('')}</div>
+<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+</body></html>`;
+}
+
 // ─── Public API ────────────────────────────────────────────────
 export function doPrint(invoice, type, settings) {
   const html = type === 'kwitansi'
@@ -598,6 +787,14 @@ export function doPrintBlankReceipt(variant, settings, copies = 1) {
   const html = variant === 'plain'
     ? buildBlankReceiptPlainHTML(copies)
     : buildBlankReceiptThemedHTML(settings, copies);
+  const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
+  if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+export function doPrintBusinessCard(side, data) {
+  const html = buildBusinessCardHTML(data, side);
   const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
   if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
   w.document.write(html);
