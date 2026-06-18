@@ -1,10 +1,11 @@
 // src/pages/BusinessCard.jsx
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, Btn, Input, Textarea, Icons } from '../components/UI.jsx';
-import { doPrintBusinessCard } from '../lib/print.js';
+import { doPrintBusinessCard, buildSingleCardPreviewHTML, CARD_TEMPLATE_LIST } from '../lib/print.js';
 import { DEF_SETTINGS } from '../lib/utils.js';
 
 export default function BusinessCard({ settings, setPage }) {
+  const [templateId, setTemplateId] = useState('navy-road');
   const [data, setData] = useState({
     companyName: settings?.companyName || DEF_SETTINGS.companyName,
     logo: settings?.logo || null,
@@ -28,7 +29,7 @@ export default function BusinessCard({ settings, setPage }) {
     r.readAsDataURL(f);
   };
 
-  const printSide = side => doPrintBusinessCard(side, data);
+  const printSide = side => doPrintBusinessCard(side, data, templateId);
 
   return (
     <div className="p-6 space-y-5 max-w-6xl">
@@ -38,11 +39,32 @@ export default function BusinessCard({ settings, setPage }) {
             Cetak Kartu Nama
           </h1>
           <p className="text-slate-400 text-sm mt-0.5">
-            Desain kartu nama 2 sisi untuk rental mobil — isi data, lalu cetak presisi di kertas A4.
+            Pilih template, isi data, lalu cetak kartu nama 2 sisi presisi di kertas A4.
           </p>
         </div>
         <Btn variant="ghost" onClick={() => setPage('dashboard')}>{Icons.back} Kembali</Btn>
       </div>
+
+      {/* ── PEMILIHAN TEMPLATE ──────────────────── */}
+      <Card className="p-5">
+        <h3 className="font-bold text-[#0f2544] mb-3">Pilih Template</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {CARD_TEMPLATE_LIST.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTemplateId(t.id)}
+              className={`text-left rounded-xl border-2 p-3 transition-all duration-150
+                ${templateId === t.id ? 'border-[#0f2544] bg-[#0f2544]/5 shadow-sm' : 'border-slate-100 hover:border-slate-200'}`}
+            >
+              <div className="flex gap-1 mb-2 h-6 rounded-lg overflow-hidden">
+                {t.swatch.map((c, i) => <div key={i} style={{ background: c, flex: 1 }} />)}
+              </div>
+              <div className={`text-xs font-bold ${templateId === t.id ? 'text-[#0f2544]' : 'text-slate-600'}`}>{t.label}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">{t.desc}</div>
+            </button>
+          ))}
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5">
         {/* ── FORM ───────────────────────────────── */}
@@ -86,10 +108,10 @@ export default function BusinessCard({ settings, setPage }) {
         {/* ── PREVIEW + CETAK ────────────────────── */}
         <div className="space-y-4">
           <Card className="p-6">
-            <h3 className="font-bold text-[#0f2544] mb-4">Pratinjau</h3>
+            <h3 className="font-bold text-[#0f2544] mb-4">Pratinjau — {CARD_TEMPLATE_LIST.find(t => t.id === templateId)?.label}</h3>
             <div className="flex flex-wrap gap-8 justify-center">
-              <CardPreview side="front" data={data} />
-              <CardPreview side="back" data={data} />
+              <CardPreview side="front" data={data} templateId={templateId} />
+              <CardPreview side="back" data={data} templateId={templateId} />
             </div>
           </Card>
 
@@ -126,67 +148,30 @@ export default function BusinessCard({ settings, setPage }) {
   );
 }
 
-// ── Mini preview kartu (scaled CSS, bukan untuk cetak) ──────────
-function CardPreview({ side, data }) {
-  const co = data.companyName || DEF_SETTINGS.companyName;
-  const W = 270, H = 165; // px, rasio 90:55
-
-  if (side === 'front') {
-    return (
-      <div style={{ width: W, height: H }}
-        className="relative rounded-lg overflow-hidden shadow-lg"
-      >
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg,#0f2544 0%,#13294f 55%,#07172e 100%)' }} />
-        <div className="absolute left-[-10%] bottom-[42px] w-[120%] h-[42px] rounded-full"
-          style={{ borderTop: '1.5px solid rgba(212,160,23,.55)', transform: 'rotate(-3deg)' }} />
-        <div className="absolute left-0 bottom-0 w-full h-[7px]" style={{ background: 'linear-gradient(90deg,#d4a017,#f0c040)' }} />
-        <div className="absolute top-3 left-4 right-4 flex items-center gap-2">
-          <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-            style={{ background: data.logo ? 'transparent' : 'linear-gradient(135deg,#d4a017,#f0c040)' }}>
-            {data.logo
-              ? <img src={data.logo} className="w-full h-full object-contain" alt="" />
-              : <span className="text-[#0f2544] font-black text-[8px]" style={{ fontFamily: 'Playfair Display,serif' }}>DRM</span>}
-          </div>
-          <div className="text-[8px] font-bold uppercase tracking-wide text-slate-100 leading-tight">{co}</div>
-        </div>
-        <div className="absolute left-4 right-4 bottom-5">
-          <div className="text-white font-black text-base leading-tight" style={{ fontFamily: 'Playfair Display,serif' }}>
-            {data.personName || 'Nama Anda'}
-          </div>
-          <div className="text-[8px] font-semibold uppercase tracking-wider mt-0.5" style={{ color: '#d4a017' }}>
-            {data.personTitle || 'Jabatan'}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const rows = [
-    data.phone    ? { ic: '📞', v: data.phone } : null,
-    data.whatsapp ? { ic: '💬', v: data.whatsapp } : null,
-    data.email    ? { ic: '✉', v: data.email } : null,
-    data.website  ? { ic: '🌐', v: data.website } : null,
-    data.address  ? { ic: '📍', v: data.address } : null,
-  ].filter(Boolean);
+// ── Preview kartu via iframe (render HTML/CSS yang identik dengan hasil cetak) ──
+function CardPreview({ side, data, templateId }) {
+  const html = useMemo(() => buildSingleCardPreviewHTML(data, side, templateId), [data, side, templateId]);
+  // Kartu 90x55mm -> tampilkan di kotak 270x165px (scale 3x dari mm->px referensi ~96dpi/cm disederhanakan)
+  const BOX_W = 270, BOX_H = 165;
+  // iframe dirender pada ukuran asli mm (dikonversi ke px css @ 3.7795 px/mm), lalu di-scale agar pas BOX
+  const IFRAME_W_MM_PX = 90 * 3.7795;
+  const IFRAME_H_MM_PX = 55 * 3.7795;
+  const scale = BOX_W / IFRAME_W_MM_PX;
 
   return (
-    <div style={{ width: W, height: H }} className="relative rounded-lg overflow-hidden shadow-lg bg-white border border-slate-100">
-      <div className="absolute top-0 right-0 w-16 h-16" style={{ background: 'linear-gradient(135deg,transparent 50%,#f4f6fb 50%)' }} />
-      <div className="absolute top-2.5 right-2.5 w-7 h-7 rounded-tr-lg" style={{ borderTop: '1.5px solid #d4a017', borderRight: '1.5px solid #d4a017', opacity: .8 }} />
-      <div className="absolute top-3 left-4 font-black text-[#0f2544] text-[11px] leading-tight max-w-[170px]" style={{ fontFamily: 'Playfair Display,serif' }}>
-        {co}
-      </div>
-      <div className="absolute top-[34px] left-4 text-[6.5px] font-semibold uppercase tracking-wide text-slate-400 max-w-[170px]">
-        {data.tagline || 'Sewa Mobil Terpercaya & Nyaman'}
-      </div>
-      <div className="absolute left-4 right-4 bottom-3 flex flex-col gap-1">
-        {(rows.length ? rows : [{ ic: '📞', v: '0812xxxxxxx' }]).map((r, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <span className="text-[7px] w-3">{r.ic}</span>
-            <span className="text-[7px] font-semibold text-slate-600 truncate">{r.v}</span>
-          </div>
-        ))}
-      </div>
+    <div style={{ width: BOX_W, height: BOX_H }} className="relative rounded-lg overflow-hidden shadow-lg bg-white">
+      <iframe
+        title={`preview-${side}`}
+        srcDoc={html}
+        style={{
+          width: IFRAME_W_MM_PX,
+          height: IFRAME_H_MM_PX,
+          border: 'none',
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          pointerEvents: 'none',
+        }}
+      />
     </div>
   );
 }

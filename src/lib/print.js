@@ -584,7 +584,7 @@ function buildBlankReceiptPlainHTML(copies) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// KARTU NAMA — Rental Mobil, 2 Sisi, Grid A4 presisi
+// KARTU NAMA — 5 Template, 2 Sisi, Grid A4 presisi
 // Kartu 90×55mm standar, 4 kolom × 5 baris = 20 kartu / lembar A4
 // Sisi belakang di-mirror horizontal per baris agar pas saat
 // kertas dibalik dari sisi panjang (long-edge flip) untuk duplex print.
@@ -605,49 +605,279 @@ function cnGapsAndMargin() {
   return { gapX, gapY, marginX, marginY };
 }
 
-function cnFrontCardHTML(data) {
-  const co = data.companyName || 'Dearma Rental Mobil Medan';
-  return `
-    <div class="cn-card cn-front">
+function contactRows(data) {
+  return [
+    data.phone    ? { ic: '📞', v: data.phone } : null,
+    data.whatsapp ? { ic: '💬', v: data.whatsapp } : null,
+    data.email    ? { ic: '✉', v: data.email } : null,
+    data.website  ? { ic: '🌐', v: data.website } : null,
+    data.address  ? { ic: '📍', v: data.address } : null,
+  ].filter(Boolean);
+}
+
+function initials(name) {
+  return (name || 'DR').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('');
+}
+
+// ════════ TEMPLATE DEFINITIONS ════════
+// Setiap template punya: id, label, swatch (untuk thumbnail pemilihan),
+// css (string), front(data) → html, back(data) → html
+const TEMPLATES = {
+
+  // ── 1. NAVY ROAD — elegan, garis jalan emas melengkung ─────────
+  'navy-road': {
+    label: 'Navy Road',
+    desc: 'Elegan & korporat — navy gradient dengan jalur emas melengkung',
+    swatch: ['#0f2544', '#d4a017', '#ffffff'],
+    css: `
+      .tpl-navy-road.cn-front{ background:linear-gradient(135deg,#0f2544 0%,#13294f 55%,#07172e 100%); color:#fff; }
+      .tpl-navy-road .cn-road{ position:absolute;left:-10%;bottom:14mm;width:120%;height:14mm; border-top:1.1px solid rgba(212,160,23,.55); border-radius:50%; transform:rotate(-3deg); }
+      .tpl-navy-road .cn-gold-line{ position:absolute;left:0;bottom:0;width:100%;height:2.3mm; background:linear-gradient(90deg,#d4a017,#f0c040); }
+      .tpl-navy-road .cn-front-top{ position:absolute;top:4.2mm;left:5mm;right:5mm; display:flex;align-items:center;gap:2.4mm; }
+      .tpl-navy-road .cn-logo{width:8mm;height:8mm;flex-shrink:0;}
+      .tpl-navy-road .cn-logo img{width:100%;height:100%;object-fit:contain;}
+      .tpl-navy-road .cn-logo-ph{ width:8mm;height:8mm;border-radius:1.6mm; background:linear-gradient(135deg,#d4a017,#f0c040); display:flex;align-items:center;justify-content:center; color:#0f2544;font-weight:900;font-size:2.6mm;font-family:'Playfair Display',serif; }
+      .tpl-navy-road .cn-co-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:700; font-size:2.7mm;letter-spacing:.3mm;color:#f3f5fa; text-transform:uppercase;line-height:1.2; }
+      .tpl-navy-road .cn-front-bottom{ position:absolute;left:5mm;bottom:6.6mm;right:5mm; }
+      .tpl-navy-road .cn-person-name{ font-family:'Playfair Display',serif;font-weight:900; font-size:5.6mm;color:#fff;line-height:1.05; }
+      .tpl-navy-road .cn-person-title{ margin-top:1mm;font-size:2.5mm;font-weight:600;letter-spacing:.4mm; color:#d4a017;text-transform:uppercase; }
+      .tpl-navy-road.cn-back{ background:#ffffff; }
+      .tpl-navy-road .cn-back-corner{ position:absolute;top:0;right:0;width:24mm;height:24mm; background:linear-gradient(135deg,transparent 50%,#f4f6fb 50%); }
+      .tpl-navy-road .cn-back-corner::after{ content:'';position:absolute;top:5mm;right:5mm;width:10mm;height:10mm; border-top:1.1px solid #d4a017;border-right:1.1px solid #d4a017; border-radius:0 4mm 0 0;opacity:.8; }
+      .tpl-navy-road .cn-back-co{ position:absolute;top:4.4mm;left:5mm; font-family:'Playfair Display',serif;font-weight:900; font-size:3.6mm;color:#0f2544;line-height:1.15;max-width:60mm; }
+      .tpl-navy-road .cn-back-tag{ position:absolute;top:10.2mm;left:5mm; font-size:2.1mm;color:#94a3b8;font-weight:600;letter-spacing:.2mm; text-transform:uppercase;max-width:60mm; }
+      .tpl-navy-road .cn-back-contacts{ position:absolute;left:5mm;bottom:4.6mm;right:5mm; display:flex;flex-direction:column;gap:1.5mm; }
+      .tpl-navy-road .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
+      .tpl-navy-road .cn-ic{font-size:2.3mm;width:4mm;flex-shrink:0;}
+      .tpl-navy-road .cn-cv{font-size:2.3mm;color:#334155;font-weight:600;word-break:break-all;}
+    `,
+    front: data => `
       <div class="cn-road"></div>
       <div class="cn-front-top">
-        <div class="cn-logo">
-          ${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DRM</div>`}
-        </div>
-        <div class="cn-co-name">${co}</div>
+        <div class="cn-logo">${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DRM</div>`}</div>
+        <div class="cn-co-name">${data.companyName}</div>
       </div>
       <div class="cn-front-bottom">
         <div class="cn-person-name">${data.personName || 'Nama Anda'}</div>
         <div class="cn-person-title">${data.personTitle || 'Jabatan'}</div>
       </div>
-      <div class="cn-gold-line"></div>
-    </div>`;
-}
-
-function cnBackCardHTML(data) {
-  const co = data.companyName || 'Dearma Rental Mobil Medan';
-  const rows = [
-    data.phone   ? { ic: '📞', v: data.phone } : null,
-    data.whatsapp? { ic: '💬', v: data.whatsapp } : null,
-    data.email   ? { ic: '✉', v: data.email } : null,
-    data.website ? { ic: '🌐', v: data.website } : null,
-    data.address ? { ic: '📍', v: data.address } : null,
-  ].filter(Boolean);
-
-  return `
-    <div class="cn-card cn-back">
+      <div class="cn-gold-line"></div>`,
+    back: data => `
       <div class="cn-back-corner"></div>
-      <div class="cn-back-co">${co}</div>
-      <div class="cn-back-tag">${data.tagline || 'Sewa Mobil Terpercaya & Nyaman'}</div>
+      <div class="cn-back-co">${data.companyName}</div>
+      <div class="cn-back-tag">${data.tagline}</div>
       <div class="cn-back-contacts">
-        ${rows.map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
-      </div>
-    </div>`;
-}
+        ${contactRows(data).map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
+      </div>`,
+  },
 
-function buildBusinessCardHTML(data, side) {
+  // ── 2. SPEEDLINE — sporty, garis kecepatan diagonal, merah-hitam ──
+  'speedline': {
+    label: 'Speedline',
+    desc: 'Sporty & dinamis — garis kecepatan diagonal, aksen merah balap',
+    swatch: ['#15161a', '#e11d2e', '#ffffff'],
+    css: `
+      .tpl-speedline.cn-front{ background:#15161a; color:#fff; }
+      .tpl-speedline .sl-stripe{ position:absolute; height:5.5mm; background:#e11d2e; transform:skewX(-22deg); }
+      .tpl-speedline .sl-s1{ top:0; right:-6mm; width:26mm; }
+      .tpl-speedline .sl-s2{ top:6.2mm; right:-6mm; width:16mm; background:#fff; opacity:.92; }
+      .tpl-speedline .sl-s3{ bottom:0; left:-6mm; width:38mm; height:4mm; }
+      .tpl-speedline .cn-front-top{ position:absolute;top:4.5mm;left:5mm;right:5mm; display:flex;align-items:center;gap:2.4mm; z-index:2; }
+      .tpl-speedline .cn-logo{width:8mm;height:8mm;flex-shrink:0;}
+      .tpl-speedline .cn-logo img{width:100%;height:100%;object-fit:contain;}
+      .tpl-speedline .cn-logo-ph{ width:8mm;height:8mm;border-radius:1.6mm; background:#e11d2e; display:flex;align-items:center;justify-content:center; color:#fff;font-weight:900;font-size:2.6mm;font-family:'Plus Jakarta Sans',sans-serif; }
+      .tpl-speedline .cn-co-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:800; font-size:2.3mm;letter-spacing:.3mm;color:#fff; text-transform:uppercase;line-height:1.2;max-width:52mm; }
+      .tpl-speedline .cn-front-bottom{ position:absolute;left:5mm;bottom:7mm;right:5mm; z-index:2; }
+      .tpl-speedline .cn-person-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:900; font-size:5mm;color:#fff;line-height:1.05;letter-spacing:.2mm; font-style:italic; }
+      .tpl-speedline .cn-person-title{ margin-top:1mm;font-size:2.4mm;font-weight:700;letter-spacing:.5mm; color:#e11d2e;text-transform:uppercase; }
+      .tpl-speedline.cn-back{ background:#fff; }
+      .tpl-speedline .sl-back-stripe{ position:absolute;top:0;left:0;width:100%;height:4mm;background:#e11d2e; }
+      .tpl-speedline .sl-back-stripe2{ position:absolute;top:4mm;left:0;width:60%;height:1mm;background:#15161a; }
+      .tpl-speedline .cn-back-co{ position:absolute;top:9mm;left:5mm; font-family:'Plus Jakarta Sans',sans-serif;font-weight:900; font-size:3.5mm;color:#15161a;line-height:1.15;max-width:65mm;text-transform:uppercase; }
+      .tpl-speedline .cn-back-tag{ position:absolute;top:14.6mm;left:5mm; font-size:2.1mm;color:#e11d2e;font-weight:700;letter-spacing:.3mm; text-transform:uppercase;max-width:65mm; }
+      .tpl-speedline .cn-back-contacts{ position:absolute;left:5mm;bottom:4.6mm;right:5mm; display:flex;flex-direction:column;gap:1.5mm; }
+      .tpl-speedline .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
+      .tpl-speedline .cn-ic{font-size:2.3mm;width:4mm;flex-shrink:0;}
+      .tpl-speedline .cn-cv{font-size:2.3mm;color:#27272a;font-weight:700;word-break:break-all;}
+    `,
+    front: data => `
+      <div class="sl-stripe sl-s1"></div>
+      <div class="sl-stripe sl-s2"></div>
+      <div class="sl-stripe sl-s3"></div>
+      <div class="cn-front-top">
+        <div class="cn-logo">${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DRM</div>`}</div>
+        <div class="cn-co-name">${data.companyName}</div>
+      </div>
+      <div class="cn-front-bottom">
+        <div class="cn-person-name">${data.personName || 'Nama Anda'}</div>
+        <div class="cn-person-title">${data.personTitle || 'Jabatan'}</div>
+      </div>`,
+    back: data => `
+      <div class="sl-back-stripe"></div>
+      <div class="sl-back-stripe2"></div>
+      <div class="cn-back-co">${data.companyName}</div>
+      <div class="cn-back-tag">${data.tagline}</div>
+      <div class="cn-back-contacts">
+        ${contactRows(data).map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
+      </div>`,
+  },
+
+  // ── 3. MINIMALIST KEY — krem/charcoal, ikon kunci mobil, minimalis ─
+  'minimalist-key': {
+    label: 'Minimalist Key',
+    desc: 'Bersih & modern — krem-charcoal dengan motif kunci mobil tipis',
+    swatch: ['#f4f1ea', '#2b2826', '#b08d57'],
+    css: `
+      .tpl-minimalist-key.cn-front{ background:#f4f1ea; color:#2b2826; }
+      .tpl-minimalist-key .mk-key{ position:absolute;right:5mm;top:50%;transform:translateY(-50%);opacity:.14; }
+      .tpl-minimalist-key .mk-rule{ position:absolute;left:5mm;right:5mm;top:16.5mm;height:0.3mm;background:#2b2826;opacity:.18; }
+      .tpl-minimalist-key .cn-front-top{ position:absolute;top:4.5mm;left:5mm;right:5mm; display:flex;align-items:center;gap:2.2mm; }
+      .tpl-minimalist-key .cn-logo{width:7mm;height:7mm;flex-shrink:0;}
+      .tpl-minimalist-key .cn-logo img{width:100%;height:100%;object-fit:contain;}
+      .tpl-minimalist-key .cn-logo-ph{ width:7mm;height:7mm;border-radius:50%; border:0.5px solid #2b2826; display:flex;align-items:center;justify-content:center; color:#2b2826;font-weight:700;font-size:2.2mm;font-family:'Plus Jakarta Sans',sans-serif; }
+      .tpl-minimalist-key .cn-co-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:600; font-size:2.3mm;letter-spacing:.5mm;color:#2b2826; text-transform:uppercase;line-height:1.2; }
+      .tpl-minimalist-key .cn-front-bottom{ position:absolute;left:5mm;bottom:6.5mm;right:14mm; }
+      .tpl-minimalist-key .cn-person-name{ font-family:'Playfair Display',serif;font-weight:700; font-size:5mm;color:#2b2826;line-height:1.05; }
+      .tpl-minimalist-key .cn-person-title{ margin-top:1.2mm;font-size:2.2mm;font-weight:500;letter-spacing:.5mm; color:#b08d57;text-transform:uppercase; }
+      .tpl-minimalist-key.cn-back{ background:#2b2826; color:#f4f1ea; }
+      .tpl-minimalist-key .mk-rule-back{ position:absolute;left:5mm;top:13mm;width:14mm;height:0.4mm;background:#b08d57; }
+      .tpl-minimalist-key .cn-back-co{ position:absolute;top:4.6mm;left:5mm; font-family:'Playfair Display',serif;font-weight:700; font-size:3.4mm;color:#f4f1ea;line-height:1.15;max-width:65mm; }
+      .tpl-minimalist-key .cn-back-tag{ position:absolute;top:9.8mm;left:5mm; font-size:2mm;color:#b08d57;font-weight:500;letter-spacing:.4mm; text-transform:uppercase;max-width:65mm; }
+      .tpl-minimalist-key .cn-back-contacts{ position:absolute;left:5mm;bottom:4.6mm;right:5mm; display:flex;flex-direction:column;gap:1.6mm; }
+      .tpl-minimalist-key .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
+      .tpl-minimalist-key .cn-ic{font-size:2.2mm;width:4mm;flex-shrink:0;filter:grayscale(1) brightness(1.8);}
+      .tpl-minimalist-key .cn-cv{font-size:2.2mm;color:#e8e4da;font-weight:500;word-break:break-all;}
+    `,
+    front: data => `
+      <svg class="mk-key" width="34mm" height="34mm" viewBox="0 0 100 100" fill="none" stroke="#2b2826" stroke-width="2.2">
+        <circle cx="34" cy="50" r="16"/><circle cx="34" cy="50" r="5" fill="#2b2826"/>
+        <line x1="50" y1="50" x2="92" y2="50"/><line x1="74" y1="50" x2="74" y2="62"/><line x1="84" y1="50" x2="84" y2="60"/>
+      </svg>
+      <div class="mk-rule"></div>
+      <div class="cn-front-top">
+        <div class="cn-logo">${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DR</div>`}</div>
+        <div class="cn-co-name">${data.companyName}</div>
+      </div>
+      <div class="cn-front-bottom">
+        <div class="cn-person-name">${data.personName || 'Nama Anda'}</div>
+        <div class="cn-person-title">${data.personTitle || 'Jabatan'}</div>
+      </div>`,
+    back: data => `
+      <div class="mk-rule-back"></div>
+      <div class="cn-back-co">${data.companyName}</div>
+      <div class="cn-back-tag">${data.tagline}</div>
+      <div class="cn-back-contacts">
+        ${contactRows(data).map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
+      </div>`,
+  },
+
+  // ── 4. ASPHALT NIGHT — gelap, garis aspal putus-putus, aksen kuning ─
+  'asphalt-night': {
+    label: 'Asphalt Night',
+    desc: 'Jalanan malam — tekstur garis aspal putus-putus, kuning rambu jalan',
+    swatch: ['#1c1c1e', '#fbbf24', '#ffffff'],
+    css: `
+      .tpl-asphalt-night.cn-front{ background:linear-gradient(180deg,#26262a 0%,#1c1c1e 100%); color:#fff; }
+      .tpl-asphalt-night .an-lane{ position:absolute;left:0;right:0;top:17mm;height:1.4mm; background-image:repeating-linear-gradient(90deg,#fbbf24 0,#fbbf24 7mm,transparent 7mm,transparent 11mm); opacity:.85; }
+      .tpl-asphalt-night .an-edge{ position:absolute;left:0;bottom:0;width:100%;height:1mm;background:#fbbf24; }
+      .tpl-asphalt-night .cn-front-top{ position:absolute;top:4.5mm;left:5mm;right:5mm; display:flex;align-items:center;gap:2.4mm; }
+      .tpl-asphalt-night .cn-logo{width:8mm;height:8mm;flex-shrink:0;}
+      .tpl-asphalt-night .cn-logo img{width:100%;height:100%;object-fit:contain;}
+      .tpl-asphalt-night .cn-logo-ph{ width:8mm;height:8mm;border-radius:1.4mm; background:#fbbf24; display:flex;align-items:center;justify-content:center; color:#1c1c1e;font-weight:900;font-size:2.6mm;font-family:'Plus Jakarta Sans',sans-serif; }
+      .tpl-asphalt-night .cn-co-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:700; font-size:2.6mm;letter-spacing:.3mm;color:#fff; text-transform:uppercase;line-height:1.2; }
+      .tpl-asphalt-night .cn-front-bottom{ position:absolute;left:5mm;bottom:4.2mm;right:5mm; }
+      .tpl-asphalt-night .cn-person-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:800; font-size:5mm;color:#fff;line-height:1.05; }
+      .tpl-asphalt-night .cn-person-title{ margin-top:1mm;font-size:2.4mm;font-weight:600;letter-spacing:.4mm; color:#fbbf24;text-transform:uppercase; }
+      .tpl-asphalt-night.cn-back{ background:#fff; }
+      .tpl-asphalt-night .an-back-lane{ position:absolute;top:0;left:0;right:0;height:1.4mm; background-image:repeating-linear-gradient(90deg,#1c1c1e 0,#1c1c1e 6mm,transparent 6mm,transparent 9.5mm); opacity:.85; }
+      .tpl-asphalt-night .an-back-edge{ position:absolute;top:1.4mm;left:0;width:100%;height:0.8mm;background:#fbbf24; }
+      .tpl-asphalt-night .cn-back-co{ position:absolute;top:7mm;left:5mm; font-family:'Plus Jakarta Sans',sans-serif;font-weight:800; font-size:3.5mm;color:#1c1c1e;line-height:1.15;max-width:65mm; }
+      .tpl-asphalt-night .cn-back-tag{ position:absolute;top:12.6mm;left:5mm; font-size:2.1mm;color:#9a9a9e;font-weight:600;letter-spacing:.2mm; text-transform:uppercase;max-width:65mm; }
+      .tpl-asphalt-night .cn-back-contacts{ position:absolute;left:5mm;bottom:4.6mm;right:5mm; display:flex;flex-direction:column;gap:1.5mm; }
+      .tpl-asphalt-night .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
+      .tpl-asphalt-night .cn-ic{font-size:2.3mm;width:4mm;flex-shrink:0;}
+      .tpl-asphalt-night .cn-cv{font-size:2.3mm;color:#3f3f46;font-weight:600;word-break:break-all;}
+    `,
+    front: data => `
+      <div class="an-lane"></div>
+      <div class="an-edge"></div>
+      <div class="cn-front-top">
+        <div class="cn-logo">${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DRM</div>`}</div>
+        <div class="cn-co-name">${data.companyName}</div>
+      </div>
+      <div class="cn-front-bottom">
+        <div class="cn-person-name">${data.personName || 'Nama Anda'}</div>
+        <div class="cn-person-title">${data.personTitle || 'Jabatan'}</div>
+      </div>`,
+    back: data => `
+      <div class="an-back-lane"></div>
+      <div class="an-back-edge"></div>
+      <div class="cn-back-co">${data.companyName}</div>
+      <div class="cn-back-tag">${data.tagline}</div>
+      <div class="cn-back-contacts">
+        ${contactRows(data).map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
+      </div>`,
+  },
+
+  // ── 5. LUXURY GOLD — hitam pekat + emas, monogram, kesan eksekutif ──
+  'luxury-gold': {
+    label: 'Luxury Gold',
+    desc: 'Mewah & eksekutif — hitam pekat, emas penuh, monogram inisial',
+    swatch: ['#0a0a0a', '#d4af37', '#ffffff'],
+    css: `
+      .tpl-luxury-gold.cn-front{ background:#0a0a0a; color:#fff; }
+      .tpl-luxury-gold .lg-frame{ position:absolute;inset:2.6mm;border:0.4px solid rgba(212,175,55,.55); }
+      .tpl-luxury-gold .lg-mono{ position:absolute;right:5mm;top:50%;transform:translateY(-50%); font-family:'Playfair Display',serif;font-weight:900;font-size:14mm; color:rgba(212,175,55,.16); line-height:1; }
+      .tpl-luxury-gold .cn-front-top{ position:absolute;top:5.5mm;left:6mm;right:6mm; display:flex;align-items:center;gap:2.4mm; }
+      .tpl-luxury-gold .cn-logo{width:7.5mm;height:7.5mm;flex-shrink:0;}
+      .tpl-luxury-gold .cn-logo img{width:100%;height:100%;object-fit:contain;}
+      .tpl-luxury-gold .cn-logo-ph{ width:7.5mm;height:7.5mm;border-radius:50%; border:0.6px solid #d4af37; display:flex;align-items:center;justify-content:center; color:#d4af37;font-weight:700;font-size:2.3mm;font-family:'Playfair Display',serif; }
+      .tpl-luxury-gold .cn-co-name{ font-family:'Plus Jakarta Sans',sans-serif;font-weight:500; font-size:2.3mm;letter-spacing:.6mm;color:#d4af37; text-transform:uppercase;line-height:1.2; }
+      .tpl-luxury-gold .cn-front-bottom{ position:absolute;left:6mm;bottom:6.8mm;right:6mm; }
+      .tpl-luxury-gold .cn-person-name{ font-family:'Playfair Display',serif;font-weight:700; font-size:5.2mm;color:#fff;line-height:1.05; }
+      .tpl-luxury-gold .cn-person-title{ margin-top:1.2mm;font-size:2.2mm;font-weight:500;letter-spacing:.6mm; color:#d4af37;text-transform:uppercase; }
+      .tpl-luxury-gold.cn-back{ background:#0a0a0a; color:#fff; }
+      .tpl-luxury-gold .lg-frame-back{ position:absolute;inset:2.6mm;border:0.4px solid rgba(212,175,55,.55); }
+      .tpl-luxury-gold .lg-divider{ position:absolute;left:6mm;top:13mm;width:12mm;height:0.4px;background:#d4af37; }
+      .tpl-luxury-gold .cn-back-co{ position:absolute;top:5.6mm;left:6mm; font-family:'Playfair Display',serif;font-weight:700; font-size:3.3mm;color:#fff;line-height:1.15;max-width:65mm; }
+      .tpl-luxury-gold .cn-back-tag{ position:absolute;top:14.4mm;left:6mm; font-size:1.9mm;color:#d4af37;font-weight:500;letter-spacing:.4mm; text-transform:uppercase;max-width:65mm; }
+      .tpl-luxury-gold .cn-back-contacts{ position:absolute;left:6mm;bottom:5mm;right:6mm; display:flex;flex-direction:column;gap:1.6mm; }
+      .tpl-luxury-gold .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
+      .tpl-luxury-gold .cn-ic{font-size:2.2mm;width:4mm;flex-shrink:0;filter:sepia(1) saturate(3) brightness(1.3);}
+      .tpl-luxury-gold .cn-cv{font-size:2.2mm;color:#d8d3c4;font-weight:500;word-break:break-all;}
+    `,
+    front: data => `
+      <div class="lg-frame"></div>
+      <div class="lg-mono">${initials(data.personName)}</div>
+      <div class="cn-front-top">
+        <div class="cn-logo">${data.logo ? `<img src="${data.logo}" alt="Logo">` : `<div class="cn-logo-ph">DR</div>`}</div>
+        <div class="cn-co-name">${data.companyName}</div>
+      </div>
+      <div class="cn-front-bottom">
+        <div class="cn-person-name">${data.personName || 'Nama Anda'}</div>
+        <div class="cn-person-title">${data.personTitle || 'Jabatan'}</div>
+      </div>`,
+    back: data => `
+      <div class="lg-frame-back"></div>
+      <div class="lg-divider"></div>
+      <div class="cn-back-co">${data.companyName}</div>
+      <div class="cn-back-tag">${data.tagline}</div>
+      <div class="cn-back-contacts">
+        ${contactRows(data).map(r => `<div class="cn-contact-row"><span class="cn-ic">${r.ic}</span><span class="cn-cv">${r.v}</span></div>`).join('')}
+      </div>`,
+  },
+};
+
+export const CARD_TEMPLATE_LIST = Object.entries(TEMPLATES).map(([id, t]) => ({
+  id, label: t.label, desc: t.desc, swatch: t.swatch,
+}));
+
+function buildBusinessCardHTML(data, side, templateId) {
+  const tpl = TEMPLATES[templateId] || TEMPLATES['navy-road'];
+  const tplClass = `tpl-${templateId}`;
   const { gapX, gapY, marginX, marginY } = cnGapsAndMargin();
-  const total = COLS * ROWS;
+
+  const oneCard = () => `<div class="cn-card ${tplClass} cn-${side}">${side === 'front' ? tpl.front(data) : tpl.back(data)}</div>`;
 
   // depan: urutan normal kiri→kanan.
   // belakang: urutan tiap baris dibalik (mirror horizontal) agar saat
@@ -655,10 +885,7 @@ function buildBusinessCardHTML(data, side) {
   // jatuh tepat menimpa kartu depan.
   const cardsHTML = [];
   for (let r = 0; r < ROWS; r++) {
-    const rowCards = [];
-    for (let c = 0; c < COLS; c++) {
-      rowCards.push(side === 'front' ? cnFrontCardHTML(data) : cnBackCardHTML(data));
-    }
+    const rowCards = Array.from({ length: COLS }, oneCard);
     if (side === 'back') rowCards.reverse();
     cardsHTML.push(...rowCards);
   }
@@ -668,7 +895,7 @@ function buildBusinessCardHTML(data, side) {
   return `<!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="UTF-8">
-<title>KARTU NAMA - ${side === 'front' ? 'Depan' : 'Belakang'} - ${co}</title>
+<title>KARTU NAMA - ${side === 'front' ? 'Depan' : 'Belakang'} - ${tpl.label} - ${co}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -686,81 +913,7 @@ function buildBusinessCardHTML(data, side) {
     width:${CARD_W}mm;height:${CARD_H}mm;position:relative;overflow:hidden;
     border:0.3px dashed #cbd5e1;
   }
-  /* ── Crop marks tiap kartu (pojok) ── */
-  .cn-card::before,.cn-card::after{content:'';position:absolute;width:3mm;height:0.25mm;background:#94a3b8;}
-  /* ── FRONT ───────────────────────────────────────────── */
-  .cn-front{
-    background:linear-gradient(135deg,#0f2544 0%,#13294f 55%,#07172e 100%);
-    color:#fff;
-  }
-  .cn-road{
-    position:absolute;left:-10%;bottom:14mm;width:120%;height:14mm;
-    border-top:1.1px solid rgba(212,160,23,.55);
-    border-radius:50%;
-    transform:rotate(-3deg);
-  }
-  .cn-gold-line{
-    position:absolute;left:0;bottom:0;width:100%;height:2.3mm;
-    background:linear-gradient(90deg,#d4a017,#f0c040);
-  }
-  .cn-front-top{
-    position:absolute;top:4.2mm;left:5mm;right:5mm;
-    display:flex;align-items:center;gap:2.4mm;
-  }
-  .cn-logo{width:8mm;height:8mm;flex-shrink:0;}
-  .cn-logo img{width:100%;height:100%;object-fit:contain;}
-  .cn-logo-ph{
-    width:8mm;height:8mm;border-radius:1.6mm;
-    background:linear-gradient(135deg,#d4a017,#f0c040);
-    display:flex;align-items:center;justify-content:center;
-    color:#0f2544;font-weight:900;font-size:2.6mm;font-family:'Playfair Display',serif;
-  }
-  .cn-co-name{
-    font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;
-    font-size:2.7mm;letter-spacing:.3mm;color:#f3f5fa;
-    text-transform:uppercase;line-height:1.2;
-  }
-  .cn-front-bottom{
-    position:absolute;left:5mm;bottom:6.6mm;right:5mm;
-  }
-  .cn-person-name{
-    font-family:'Playfair Display',serif;font-weight:900;
-    font-size:5.6mm;color:#fff;line-height:1.05;
-  }
-  .cn-person-title{
-    margin-top:1mm;font-size:2.5mm;font-weight:600;letter-spacing:.4mm;
-    color:#d4a017;text-transform:uppercase;
-  }
-  /* ── BACK ────────────────────────────────────────────── */
-  .cn-back{
-    background:#ffffff;
-  }
-  .cn-back-corner{
-    position:absolute;top:0;right:0;width:24mm;height:24mm;
-    background:linear-gradient(135deg,transparent 50%,#f4f6fb 50%);
-  }
-  .cn-back-corner::after{
-    content:'';position:absolute;top:5mm;right:5mm;width:10mm;height:10mm;
-    border-top:1.1px solid #d4a017;border-right:1.1px solid #d4a017;
-    border-radius:0 4mm 0 0;opacity:.8;
-  }
-  .cn-back-co{
-    position:absolute;top:4.4mm;left:5mm;
-    font-family:'Playfair Display',serif;font-weight:900;
-    font-size:3.6mm;color:#0f2544;line-height:1.15;max-width:60mm;
-  }
-  .cn-back-tag{
-    position:absolute;top:10.2mm;left:5mm;
-    font-size:2.1mm;color:#94a3b8;font-weight:600;letter-spacing:.2mm;
-    text-transform:uppercase;max-width:60mm;
-  }
-  .cn-back-contacts{
-    position:absolute;left:5mm;bottom:4.6mm;right:5mm;
-    display:flex;flex-direction:column;gap:1.5mm;
-  }
-  .cn-contact-row{display:flex;align-items:baseline;gap:1.8mm;}
-  .cn-ic{font-size:2.3mm;width:4mm;flex-shrink:0;}
-  .cn-cv{font-size:2.3mm;color:#334155;font-weight:600;word-break:break-all;}
+  ${tpl.css}
   @media print{
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 portrait;margin:0;}
@@ -793,10 +946,29 @@ export function doPrintBlankReceipt(variant, settings, copies = 1) {
   w.document.close();
 }
 
-export function doPrintBusinessCard(side, data) {
-  const html = buildBusinessCardHTML(data, side);
+export function doPrintBusinessCard(side, data, templateId = 'navy-road') {
+  const html = buildBusinessCardHTML(data, side, templateId);
   const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
   if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
   w.document.write(html);
   w.document.close();
+}
+
+// Single-card preview (1 kartu saja, untuk ditampilkan di iframe pratinjau)
+export function buildSingleCardPreviewHTML(data, side, templateId = 'navy-road') {
+  const tpl = TEMPLATES[templateId] || TEMPLATES['navy-road'];
+  const tplClass = `tpl-${templateId}`;
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:${CARD_W}mm;height:${CARD_H}mm;overflow:hidden;}
+  body{font-family:'Plus Jakarta Sans',Arial,sans-serif;}
+  .cn-card{width:${CARD_W}mm;height:${CARD_H}mm;position:relative;overflow:hidden;}
+  ${tpl.css}
+</style></head>
+<body>
+  <div class="cn-card ${tplClass} cn-${side}">${side === 'front' ? tpl.front(data) : tpl.back(data)}</div>
+</body></html>`;
 }
