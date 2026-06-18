@@ -24,7 +24,7 @@ export default function BlankReceipt({ settings, setPage }) {
 
       {/* Jumlah lembar */}
       <Card className="p-5">
-        <h3 className="font-bold text-[#0f2544] mb-3">Jumlah Lembar</h3>
+        <h3 className="font-bold text-[#0f2544] mb-3">Jumlah Kwitansi</h3>
         <div className="flex items-center gap-3">
           <input
             type="number" min="1" max="20"
@@ -32,7 +32,9 @@ export default function BlankReceipt({ settings, setPage }) {
             onChange={e => setCopies(e.target.value)}
             className="w-24 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]"
           />
-          <span className="text-sm text-slate-500">lembar per ukuran A5 landscape (bisa dicetak sekali jalan dalam 1 file PDF/print).</span>
+          <span className="text-sm text-slate-500">
+            kwitansi. Ukuran A4 potrait, 1 halaman dibagi 2 (atas-bawah) — jadi 2 kwitansi tercetak dalam 1 lembar A4, lengkap dengan garis potong.
+          </span>
         </div>
       </Card>
 

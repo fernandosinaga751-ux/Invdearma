@@ -341,84 +341,97 @@ function buildKwitansiHTML(invoice, settings) {
 
 // ════════════════════════════════════════════════════════════════
 // KWITANSI KOSONG — Bertema (kop perusahaan otomatis)
+// A4 portrait, 1 lembar A4 dibagi 2 (atas-bawah) = 2 kwitansi/halaman
 // ════════════════════════════════════════════════════════════════
 function buildBlankReceiptThemedHTML(settings, copies) {
   const co = settings.companyName || 'Dearma Rental Mobil Medan';
 
-  const oneCopy = () => `
-  <div class="page">
-    <div class="content">
-      <div class="header">
-        <div class="logo-box">
-          ${settings.logo ? `<img src="${settings.logo}" alt="Logo">` : `<div class="logo-ph">DRM</div>`}
-        </div>
-        <div>
-          <div class="co-name">${co}</div>
-          <div class="co-sub">
-            ${settings.address ? settings.address + '<br>' : ''}
-            ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+  const oneSlot = () => `
+    <div class="slot">
+      <div class="content">
+        <div class="header">
+          <div class="logo-box">
+            ${settings.logo ? `<img src="${settings.logo}" alt="Logo">` : `<div class="logo-ph">DRM</div>`}
+          </div>
+          <div>
+            <div class="co-name">${co}</div>
+            <div class="co-sub">
+              ${settings.address ? settings.address + '<br>' : ''}
+              ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+            </div>
+          </div>
+          <div class="kw-title">
+            <div class="t">KWITANSI</div>
+            <div class="no">No. ____________________</div>
           </div>
         </div>
-        <div class="kw-title">
-          <div class="t">KWITANSI</div>
-          <div class="no">No. ____________________</div>
-        </div>
-      </div>
 
-      <div class="kwbody">
-        <div class="kw-row">
-          <span class="kw-label">Telah diterima dari</span>
-          <span class="kw-sep">:</span>
-          <span class="kw-value fill-line">&nbsp;</span>
-        </div>
-        <div class="kw-row">
-          <span class="kw-label">Tanggal Pembayaran</span>
-          <span class="kw-sep">:</span>
-          <span class="kw-value fill-line short">&nbsp;</span>
-        </div>
-        <div class="kw-row">
-          <span class="kw-label">Untuk Pembayaran</span>
-          <span class="kw-sep">:</span>
-          <span class="kw-value">
-            <div class="fill-block"></div>
-            <div class="fill-block"></div>
-          </span>
-        </div>
-        <div class="kw-row highlight">
-          <span class="kw-label">Uang Sejumlah</span>
-          <span class="kw-sep">:</span>
-          <div style="width:100%;">
-            <div class="kw-value fill-line">&nbsp;</div>
-            <div class="terbilang-box">
-              <div class="terbilang-label">Terbilang</div>
-              <div class="terbilang-val fill-line">** &nbsp; **</div>
+        <div class="kwbody">
+          <div class="kw-row">
+            <span class="kw-label">Telah diterima dari</span>
+            <span class="kw-sep">:</span>
+            <span class="kw-value fill-line">&nbsp;</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-label">Tanggal Pembayaran</span>
+            <span class="kw-sep">:</span>
+            <span class="kw-value fill-line short">&nbsp;</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-label">Untuk Pembayaran</span>
+            <span class="kw-sep">:</span>
+            <span class="kw-value">
+              <div class="fill-block"></div>
+              <div class="fill-block"></div>
+            </span>
+          </div>
+          <div class="kw-row highlight">
+            <span class="kw-label">Uang Sejumlah</span>
+            <span class="kw-sep">:</span>
+            <div style="width:100%;">
+              <div class="kw-value fill-line">&nbsp;</div>
+              <div class="terbilang-box">
+                <div class="terbilang-label">Terbilang</div>
+                <div class="terbilang-val fill-line">** &nbsp; **</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="footer">
-        <div>
-          ${settings.bankName || settings.bankAccount ? `
-          <p>
-            ${settings.bankName    ? `Bank &nbsp;&nbsp;&nbsp;: ${settings.bankName}<br>` : ''}
-            ${settings.bankAccount ? `No. Rek : <strong>${settings.bankAccount}</strong><br>` : ''}
-            ${settings.ownerName   ? `A/N &nbsp;&nbsp;&nbsp;&nbsp;: ${settings.ownerName}` : ''}
-          </p>` : ''}
-        </div>
-        <div class="sig-box"><div class="sig-inner">
-          <div class="tanggal-box">Medan, ____________________</div>
-          <div class="sig-from">Yang Menerima,</div>
-          <div class="sig-imgs">
-            ${settings.stamp     ? `<img src="${settings.stamp}" class="stamp-img" alt="Stempel">` : ''}
-            ${settings.signature ? `<img src="${settings.signature}" class="sign-img" alt="TTD">` : '<div style="height:55px;"></div>'}
+        <div class="footer">
+          <div>
+            ${settings.bankName || settings.bankAccount ? `
+            <p>
+              ${settings.bankName    ? `Bank &nbsp;&nbsp;&nbsp;: ${settings.bankName}<br>` : ''}
+              ${settings.bankAccount ? `No. Rek : <strong>${settings.bankAccount}</strong><br>` : ''}
+              ${settings.ownerName   ? `A/N &nbsp;&nbsp;&nbsp;&nbsp;: ${settings.ownerName}` : ''}
+            </p>` : ''}
           </div>
-          <div class="sig-name">${settings.ownerName || 'Pimpinan'}</div>
-          <div class="sig-title">${co}</div>
-        </div></div>
+          <div class="sig-box"><div class="sig-inner">
+            <div class="tanggal-box">Medan, ____________________</div>
+            <div class="sig-from">Yang Menerima,</div>
+            <div class="sig-imgs">
+              ${settings.stamp     ? `<img src="${settings.stamp}" class="stamp-img" alt="Stempel">` : ''}
+              ${settings.signature ? `<img src="${settings.signature}" class="sign-img" alt="TTD">` : '<div style="height:55px;"></div>'}
+            </div>
+            <div class="sig-name">${settings.ownerName || 'Pimpinan'}</div>
+            <div class="sig-title">${co}</div>
+          </div></div>
+        </div>
       </div>
-    </div>
-  </div>`;
+    </div>`;
+
+  // Susun slot ke dalam sheet A4 (2 slot per sheet), garis gunting di tengah
+  const slots = Array.from({ length: copies }, oneSlot);
+  const sheets = [];
+  for (let i = 0; i < slots.length; i += 2) {
+    const pair = slots.slice(i, i + 2);
+    sheets.push(`
+    <div class="sheet">
+      ${pair[0]}
+      ${pair[1] ? `<div class="cut-line"></div>${pair[1]}` : ''}
+    </div>`);
+  }
 
   return `<!DOCTYPE html>
 <html lang="id"><head>
@@ -429,8 +442,11 @@ function buildBlankReceiptThemedHTML(settings, copies) {
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:210mm;}
   body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
-  .page{width:210mm;height:148mm;margin:0 auto;padding:10mm 14mm;position:relative;overflow:hidden;page-break-after:always;}
-  .page:last-child{page-break-after:auto;}
+  .sheet{width:210mm;height:297mm;margin:0 auto;position:relative;display:flex;flex-direction:column;page-break-after:always;}
+  .sheet:last-child{page-break-after:auto;}
+  .slot{width:100%;height:148.5mm;padding:9mm 14mm;position:relative;overflow:hidden;box-sizing:border-box;}
+  .cut-line{width:100%;border-top:1px dashed #bbb;position:relative;flex:0 0 0;}
+  .cut-line::after{content:'✂ potong di sini';position:absolute;left:50%;top:-7px;transform:translateX(-50%);background:#fff;padding:0 8px;font-size:8px;color:#999;letter-spacing:.5px;}
   .content{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;}
   .header{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:3px solid #0f2544;margin-bottom:10px;}
   .logo-box{width:64px;height:64px;flex-shrink:0;}
@@ -467,57 +483,68 @@ function buildBlankReceiptThemedHTML(settings, copies) {
   .tanggal-box{font-size:11px;color:#555;margin-bottom:6px;}
   @media print{
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    @page{size:A5 landscape;margin:0;}
-    .page{margin:0;width:100%;height:148mm;}
+    @page{size:A4 portrait;margin:0;}
+    .sheet{margin:0;width:100%;height:297mm;}
   }
 </style></head>
-<body>${Array.from({ length: copies }, oneCopy).join('')}
+<body>${sheets.join('')}
 <script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
 </body></html>`;
 }
 
 // ════════════════════════════════════════════════════════════════
 // KWITANSI KOSONG — Polos (siap tulis tangan, tanpa kop)
+// A4 portrait, 1 lembar A4 dibagi 2 (atas-bawah) = 2 kwitansi/halaman
 // ════════════════════════════════════════════════════════════════
 function buildBlankReceiptPlainHTML(copies) {
-  const oneCopy = () => `
-  <div class="page">
-    <div class="row1">
-      <div class="title">KWITANSI</div>
-      <div class="no-box">No. <span class="line short"></span></div>
-    </div>
+  const oneSlot = () => `
+    <div class="slot">
+      <div class="row1">
+        <div class="title">KWITANSI</div>
+        <div class="no-box">No. <span class="line short"></span></div>
+      </div>
 
-    <div class="field">
-      <span class="lbl">Sudah terima dari</span>
-      <span class="sep">:</span>
-      <span class="line"></span>
-    </div>
-    <div class="field">
-      <span class="lbl">Banyaknya uang</span>
-      <span class="sep">:</span>
-      <span class="line"></span>
-    </div>
-    <div class="field terbilang">
-      <span class="lbl">Untuk pembayaran</span>
-      <span class="sep">:</span>
-      <div class="multiline">
-        <span class="line"></span>
+      <div class="field">
+        <span class="lbl">Sudah terima dari</span>
+        <span class="sep">:</span>
         <span class="line"></span>
       </div>
-    </div>
+      <div class="field">
+        <span class="lbl">Banyaknya uang</span>
+        <span class="sep">:</span>
+        <span class="line"></span>
+      </div>
+      <div class="field terbilang">
+        <span class="lbl">Untuk pembayaran</span>
+        <span class="sep">:</span>
+        <div class="multiline">
+          <span class="line"></span>
+        </div>
+      </div>
 
-    <div class="bottom">
-      <div class="amount-box">
-        <span class="lbl">Rp</span>
-        <span class="line"></span>
+      <div class="bottom">
+        <div class="amount-box">
+          <span class="lbl">Rp</span>
+          <span class="line"></span>
+        </div>
+        <div class="sign-box">
+          <span class="line short" style="margin-bottom:2px;"></span>
+          <div class="sign-area"></div>
+          <span class="line short"></span>
+        </div>
       </div>
-      <div class="sign-box">
-        <span class="line short" style="margin-bottom:2px;"></span>
-        <div class="sign-area"></div>
-        <span class="line short"></span>
-      </div>
-    </div>
-  </div>`;
+    </div>`;
+
+  const slots = Array.from({ length: copies }, oneSlot);
+  const sheets = [];
+  for (let i = 0; i < slots.length; i += 2) {
+    const pair = slots.slice(i, i + 2);
+    sheets.push(`
+    <div class="sheet">
+      ${pair[0]}
+      ${pair[1] ? `<div class="cut-line"></div>${pair[1]}` : ''}
+    </div>`);
+  }
 
   return `<!DOCTYPE html>
 <html lang="id"><head>
@@ -527,8 +554,11 @@ function buildBlankReceiptPlainHTML(copies) {
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:210mm;}
   body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;font-size:13px;}
-  .page{width:210mm;height:148mm;margin:0 auto;padding:12mm 16mm;position:relative;border:1.5px solid #333;page-break-after:always;display:flex;flex-direction:column;}
-  .page:last-child{page-break-after:auto;}
+  .sheet{width:210mm;height:297mm;margin:0 auto;display:flex;flex-direction:column;page-break-after:always;}
+  .sheet:last-child{page-break-after:auto;}
+  .slot{width:100%;height:148.5mm;padding:10mm 16mm;position:relative;border:1.5px solid #333;display:flex;flex-direction:column;box-sizing:border-box;}
+  .cut-line{width:100%;border-top:1px dashed #bbb;position:relative;}
+  .cut-line::after{content:'✂ potong di sini';position:absolute;left:50%;top:-7px;transform:translateX(-50%);background:#fff;padding:0 8px;font-size:8px;color:#999;letter-spacing:.5px;}
   .row1{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:18px;}
   .title{font-size:24px;font-weight:900;letter-spacing:4px;}
   .no-box{font-size:12px;}
@@ -542,13 +572,13 @@ function buildBlankReceiptPlainHTML(copies) {
   .amount-box{display:flex;align-items:baseline;gap:8px;flex:1;border:1.5px solid #333;border-radius:6px;padding:8px 14px;}
   .amount-box .lbl{font-size:15px;}
   .sign-box{display:flex;flex-direction:column;align-items:center;width:180px;}
-  .sign-area{height:60px;width:100%;}
+  .sign-area{height:50px;width:100%;}
   @media print{
-    @page{size:A5 landscape;margin:0;}
-    .page{margin:0;width:100%;height:148mm;}
+    @page{size:A4 portrait;margin:0;}
+    .sheet{margin:0;width:100%;height:297mm;}
   }
 </style></head>
-<body>${Array.from({ length: copies }, oneCopy).join('')}
+<body>${sheets.join('')}
 <script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
 </body></html>`;
 }
