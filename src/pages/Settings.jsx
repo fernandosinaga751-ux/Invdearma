@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { Card, Input, Btn } from '../components/UI.jsx';
 import { toB64 } from '../lib/utils.js';
-import { saveSettings as fbSaveSettings, savePassword as fbSavePassword } from '../lib/firebase.js';
+import { saveSettings as fbSaveSettings, changeAccountPassword, saveMasterPassword } from '../lib/firebase.js';
 
-export default function Settings({ settings, setSettings, password, setPassword }) {
+export default function Settings({ settings, setSettings, sessionKind, fbUser }) {
   const [form, setForm]     = useState({ ...settings });
   const [newPw, setNewPw]   = useState('');
   const [confPw, setConfPw] = useState('');
@@ -34,14 +34,25 @@ export default function Settings({ settings, setSettings, password, setPassword 
   const handlePw = async () => {
     if (!newPw.trim())    return setPwMsg('❌ Password baru tidak boleh kosong!');
     if (newPw !== confPw) return setPwMsg('❌ Konfirmasi password tidak cocok!');
-    if (newPw.length < 4) return setPwMsg('❌ Password minimal 4 karakter!');
+    if (newPw.length < (sessionKind === 'master' ? 4 : 6)) {
+      return setPwMsg(`❌ Password minimal ${sessionKind === 'master' ? 4 : 6} karakter!`);
+    }
     try {
-      await fbSavePassword(newPw);
-      setPassword(newPw);
+      if (sessionKind === 'master') {
+        await saveMasterPassword(newPw);
+      } else {
+        await changeAccountPassword(newPw);
+      }
       setNewPw(''); setConfPw('');
       setPwMsg('✅ Password berhasil diubah!');
       setTimeout(() => setPwMsg(''), 3000);
-    } catch (e) { setPwMsg('❌ Gagal: ' + e.message); }
+    } catch (e) {
+      if (e.code === 'auth/requires-recent-login') {
+        setPwMsg('❌ Demi keamanan, silakan Keluar lalu Masuk kembali sebelum mengubah password.');
+      } else {
+        setPwMsg('❌ Gagal: ' + (e.message || e.code));
+      }
+    }
   };
 
   const ImgUpload = ({ field, label, desc, emoji }) => (
@@ -68,7 +79,7 @@ export default function Settings({ settings, setSettings, password, setPassword 
   );
 
   return (
-    <div className="p-6 space-y-5 max-w-2xl pb-12">
+    <div className="p-4 sm:p-6 space-y-5 max-w-2xl pb-12">
       <h1 className="text-2xl font-black text-[#0f2544]" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
         Pengaturan
       </h1>
@@ -111,10 +122,32 @@ export default function Settings({ settings, setSettings, password, setPassword 
         </Btn>
       </div>
 
+      {/* Akun */}
+      <Card className="p-5">
+        <h3 className="font-bold text-[#0f2544] mb-4 text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
+          Akun Saya
+        </h3>
+        {sessionKind === 'master' ? (
+          <div className="text-sm text-slate-600 space-y-1">
+            <div><span className="font-bold text-slate-400">Jenis Sesi:</span> Login Utama (Admin / Database Lama)</div>
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600 space-y-1">
+            <div><span className="font-bold text-slate-400">Email:</span> {fbUser?.email}</div>
+            {fbUser?.displayName && (
+              <div><span className="font-bold text-slate-400">Nama:</span> {fbUser.displayName}</div>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-slate-400 mt-3">
+          Data invoice, customer, dan pengaturan di sini hanya bisa diakses lewat sesi login ini.
+        </p>
+      </Card>
+
       {/* Password */}
       <Card className="p-5">
         <h3 className="font-bold text-[#0f2544] mb-4 text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
-          Ubah Password Admin
+          {sessionKind === 'master' ? 'Ubah Password Login Utama' : 'Ubah Password Akun'}
         </h3>
         <div className="space-y-3 max-w-xs">
           <Input label="Password Baru"           type="password" value={newPw}  onChange={e => setNewPw(e.target.value)}  placeholder="••••••••" />

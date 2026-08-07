@@ -101,7 +101,7 @@ function ViewInvoice({ invoice, settings, onBack, onEdit, onDelete, onBayar }) {
   const isPaid = !!invoice.paidDate;
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl">
+    <div className="p-4 sm:p-6 space-y-4 max-w-3xl">
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">
         <Btn variant="ghost" onClick={onBack}>{Icons.back} Kembali</Btn>
@@ -316,8 +316,8 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
 
   return (
     <>
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="p-4 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-black text-[#0f2544]" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
               Invoice & Kwitansi

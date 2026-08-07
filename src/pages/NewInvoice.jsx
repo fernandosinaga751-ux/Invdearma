@@ -74,8 +74,8 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-4xl">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4 max-w-4xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-[#0f2544]" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
             {editingInvoice ? 'Edit Invoice' : 'Buat Invoice Baru'}

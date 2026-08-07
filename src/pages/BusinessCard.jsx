@@ -32,8 +32,8 @@ export default function BusinessCard({ settings, setPage }) {
   const printSide = side => doPrintBusinessCard(side, data, templateId);
 
   return (
-    <div className="p-6 space-y-5 max-w-6xl">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5 max-w-6xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-[#0f2544]" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
             Cetak Kartu Nama
