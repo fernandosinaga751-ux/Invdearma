@@ -347,6 +347,63 @@ A: Ini disengaja — setiap akun baru (selain email admin) berstatus "Menunggu P
 **Q: Tombol "Hapus" di Daftar Akun tidak berfungsi / error permission?**  
 A: Pastikan Rules sudah diperbarui ke versi terbaru (dengan `isAdmin()`) dan Anda login memakai email yang sama persis dengan `VITE_ADMIN_EMAIL`. Rules versi lama (password-based) tidak mengizinkan admin menghapus data `users/{uid}/...` milik akun lain.
 
+**Q: Akun yang sudah dihapus di panel masih bisa login lagi?**  
+A: Ini bug yang sudah diperbaiki — versi lama sempat menghapus dokumen direktori akun (`accounts/{uid}`) sepenuhnya saat "Hapus", padahal itu menyebabkan sistem menganggap akun tanpa dokumen = otomatis aktif kembali. Sekarang dokumen itu **tidak dihapus**, cuma ditandai `status: 'disabled'` secara permanen — pastikan Anda memakai versi kode terbaru.
+
+## ☁️ Cloud Function: Hapus Akun Permanen (Opsional)
+
+Tombol "Hapus" di menu Daftar Akun **selalu** menghapus data (customer,
+invoice, settings) dan mengunci akun agar tidak bisa login — ini jalan
+tanpa perlu setup tambahan apapun.
+
+Tapi akunnya **masih tercatat** di Firebase Authentication (Anda masih bisa
+melihatnya di Firebase Console → Authentication → Users), karena aplikasi
+client (React) memang **tidak diizinkan Firebase** menghapus akun login
+milik user lain — ini batasan keamanan Firebase sendiri, bukan Anthropic.
+Satu-satunya cara menghapusnya secara total dan otomatis adalah lewat
+**Firebase Admin SDK** yang berjalan di server tepercaya (Cloud Function),
+bukan di browser pengguna.
+
+Repo ini sudah menyertakan Cloud Function siap pakai di folder `functions/`
+untuk keperluan itu. Sifatnya **opsional** — kalau tidak di-deploy,
+aplikasi tetap berjalan normal (cuma nanti muncul info bahwa akunnya masih
+ada di Firebase Auth, dan Anda bisa hapus manual lewat Console).
+
+### Cara deploy
+
+1. **Firebase project harus di plan Blaze** (pay-as-you-go). Cloud Functions
+   generasi baru (v2) mengharuskan ini, meskipun untuk pemakaian kecil
+   biasanya tetap gratis (ada kuota gratis bulanan). Upgrade di Firebase
+   Console → klik nama project → **Upgrade** (kanan bawah/sidebar).
+2. Install Firebase CLI (kalau belum ada):
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   ```
+3. Di dalam folder project ini (root, yang ada `functions/`):
+   ```bash
+   firebase init functions
+   ```
+   Saat ditanya, pilih **"Use an existing project"** → pilih project Firebase Anda, dan pilih **"JavaScript"**. Kalau ditanya mau overwrite `functions/index.js` atau `functions/package.json`, jawab **No** (biar tidak menimpa yang sudah disiapkan).
+4. Buka `functions/index.js`, ganti baris:
+   ```js
+   const ADMIN_EMAIL = 'admin@email-anda.com';
+   ```
+   dengan email admin Anda yang sebenarnya (huruf kecil semua, sama persis dengan `VITE_ADMIN_EMAIL`).
+5. Install dependency & deploy:
+   ```bash
+   cd functions
+   npm install
+   cd ..
+   firebase deploy --only functions
+   ```
+6. Setelah sukses deploy, coba lagi tombol "Hapus" di menu Daftar Akun — kali ini akunnya akan otomatis terhapus juga dari Firebase Authentication (tidak muncul lagi info "masih tercatat di Auth").
+
+> 💡 Kalau Anda tidak familiar dengan command line / Cloud Functions, tidak
+> apa-apa dilewati saja — fitur hapus data & blokir login tetap berfungsi
+> penuh tanpa ini. Cukup hapus manual lewat Firebase Console sesekali kalau
+> perlu benar-benar bersih-bersih daftar user.
+
 ---
 
 ## 🛠️ Tech Stack

@@ -10,6 +10,7 @@ import {
   doc, getDoc, setDoc, updateDoc,
   collection, getDocs, addDoc, deleteDoc,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const cfg = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -30,6 +31,7 @@ const db = initializeFirestore(app, {
   useFetchStreams: false,
 });
 const auth = getAuth(app);
+const functions = getFunctions(app);
 export { db, auth };
 
 function withTimeout(promise, ms = 10000) {
@@ -165,15 +167,27 @@ export async function setAccountStatus(uid, status) {
 }
 export async function deleteAccountCompletely(uid) {
   // Menghapus seluruh data Firestore milik akun ini (settings, customers,
-  // invoices) serta entri direktorinya, dan mengunci akun (status
-  // 'disabled') sehingga tidak bisa login lagi.
+  // invoices) dan mengunci akun secara PERMANEN.
+  //
+  // PENTING: dokumen accounts/{uid} TIDAK dihapus, cuma diubah statusnya
+  // jadi 'disabled' + ditandai dataWiped. Kalau dokumennya sampai dihapus
+  // total, bindAndVerifyAccount() akan menganggap akun ini "tidak
+  // terdaftar di direktori" dan otomatis meloloskannya sebagai status
+  // default 'active' — itulah bug lama yang menyebabkan akun yang sudah
+  // dihapus tetap bisa login lagi.
   //
   // Catatan: menghapus akun *login* (Firebase Authentication) itu sendiri
   // secara permanen memerlukan Firebase Admin SDK di server (Cloud
   // Function) karena alasan keamanan — client app tidak diizinkan
   // menghapus akun pengguna lain. Fungsi ini sudah memblokir login akun
-  // tsb dan menghapus seluruh datanya secara permanen.
-  await setDoc(doc(db, 'accounts', uid), { status: 'disabled' }, { merge: true });
+  // tsb secara permanen dan menghapus seluruh datanya. Untuk benar-benar
+  // menghilangkan akunnya dari Firebase Authentication, hapus manual di
+  // Firebase Console → Authentication → Users (lihat catatan di README).
+  await setDoc(doc(db, 'accounts', uid), {
+    status: 'disabled',
+    dataWiped: true,
+    deletedAt: new Date().toISOString(),
+  }, { merge: true });
 
   const custSnap = await getDocs(collection(db, 'users', uid, 'customers'));
   await Promise.all(custSnap.docs.map(d => deleteDoc(d.ref)));
@@ -182,7 +196,20 @@ export async function deleteAccountCompletely(uid) {
   await Promise.all(invSnap.docs.map(d => deleteDoc(d.ref)));
 
   await deleteDoc(doc(db, 'users', uid, 'config', 'settings')).catch(() => {});
-  await deleteDoc(doc(db, 'accounts', uid));
+  // Dokumen accounts/{uid} SENGAJA tidak dihapus — lihat penjelasan di atas.
+
+  // Coba hapus akunnya juga dari Firebase Authentication lewat Cloud
+  // Function (kalau sudah di-deploy — lihat README "Cloud Function: Hapus
+  // Akun Permanen"). Kalau belum di-deploy, ini gagal dengan aman dan
+  // tidak menghentikan proses — akun tetap terkunci lewat status
+  // 'disabled' di atas, cuma masih tercatat di Firebase Authentication.
+  try {
+    const fn = httpsCallable(functions, 'deleteAuthUser');
+    await fn({ uid });
+    return { authUserDeleted: true };
+  } catch (e) {
+    return { authUserDeleted: false, reason: e.message };
+  }
 }
 
 // ─── SETTINGS (mengikuti sesi aktif: master / akun) ─────────────

@@ -10,9 +10,14 @@ function formatDate(iso) {
   } catch { return iso; }
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, dataWiped }) {
   if (status === 'pending')  return <Badge color="amber">Menunggu Persetujuan</Badge>;
-  if (status === 'disabled') return <Badge color="red">Nonaktif</Badge>;
+  if (status === 'disabled') return (
+    <div className="space-y-1">
+      <Badge color="red">Nonaktif</Badge>
+      {dataWiped && <div className="text-[10px] text-red-400">Data sudah dihapus</div>}
+    </div>
+  );
   return <Badge color="green">Aktif</Badge>;
 }
 
@@ -64,13 +69,23 @@ export default function Accounts() {
   const handleDelete = async (acc) => {
     const ok = confirm(
       `Hapus akun "${acc.email}" beserta SELURUH datanya (customer & invoice)?\n\n` +
-      `Tindakan ini tidak bisa dibatalkan. Akun akan langsung terkunci dan datanya dihapus permanen.`
+      `Tindakan ini tidak bisa dibatalkan. Akun akan langsung terkunci permanen dan datanya dihapus.\n\n` +
+      `Catatan: akun ini masih akan tercatat di Firebase Authentication (login-nya diblokir dari sisi aplikasi). ` +
+      `Untuk menghapusnya total dari Firebase Authentication, lakukan manual lewat Firebase Console.`
     );
     if (!ok) return;
     setBusyId(acc.id);
     try {
-      await deleteAccountCompletely(acc.id);
-      setAccounts(list => list.filter(a => a.id !== acc.id));
+      const res = await deleteAccountCompletely(acc.id);
+      setAccounts(list => list.map(a => a.id === acc.id ? { ...a, status: 'disabled', dataWiped: true } : a));
+      if (!res?.authUserDeleted) {
+        alert(
+          'Data akun sudah dihapus & akun terkunci permanen.\n\n' +
+          'Akun ini masih tercatat di Firebase Authentication (belum ada Cloud Function ' +
+          'untuk menghapusnya otomatis — lihat README bagian "Cloud Function: Hapus Akun ' +
+          'Permanen"). Kalau mau, hapus manual lewat Firebase Console → Authentication → Users.'
+        );
+      }
     } catch (e) {
       alert('Gagal menghapus akun: ' + e.message);
     }
@@ -126,7 +141,7 @@ export default function Accounts() {
                     <td className="px-5 py-3 font-bold text-[#0f2544]">{acc.displayName || '-'}</td>
                     <td className="px-5 py-3 text-slate-600">{acc.email}</td>
                     <td className="px-5 py-3 text-slate-500 text-xs">{formatDate(acc.createdAt)}</td>
-                    <td className="px-5 py-3"><StatusBadge status={acc.status} /></td>
+                    <td className="px-5 py-3"><StatusBadge status={acc.status} dataWiped={acc.dataWiped} /></td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5 justify-end flex-wrap">
                         {acc.status === 'pending' && (
@@ -149,14 +164,16 @@ export default function Accounts() {
                             {acc.status === 'disabled' ? '✅ Aktifkan' : '⏸️ Nonaktifkan'}
                           </Btn>
                         )}
-                        <Btn
-                          variant="danger"
-                          className="text-xs px-3 py-1.5"
-                          disabled={busyId === acc.id}
-                          onClick={() => handleDelete(acc)}
-                        >
-                          {Icons.trash} Hapus
-                        </Btn>
+                        {!acc.dataWiped && (
+                          <Btn
+                            variant="danger"
+                            className="text-xs px-3 py-1.5"
+                            disabled={busyId === acc.id}
+                            onClick={() => handleDelete(acc)}
+                          >
+                            {Icons.trash} Hapus
+                          </Btn>
+                        )}
                       </div>
                     </td>
                   </tr>
