@@ -6,9 +6,11 @@ Aplikasi web invoice dan kwitansi berbasis React + Firebase untuk Dearma Rental 
 
 ## ✨ Fitur
 
-- 🔐 **Login Utama (admin, database lama)** + **Login akun (Firebase Auth, multi-akun)**
-- 🏢 **Multi-tenant** — setiap akun yang mendaftar punya databasenya sendiri, data antar akun terpisah total
-- 🗂️ **Daftar Akun** (khusus Login Utama) — nonaktifkan sementara / hapus akun yang mendaftar
+- 🔐 **1 sistem login untuk semua** — Firebase Authentication asli (email & password), aman & tidak bisa dibobol lewat Firestore
+- 👑 **Login Utama otomatis** — akun dengan email admin (`VITE_ADMIN_EMAIL`) otomatis memakai database lama, akun lain memakai database sendiri
+- ✅ **Approval admin** — akun baru yang daftar wajib disetujui admin dulu sebelum bisa login
+- 🏢 **Multi-tenant** — setiap akun yang disetujui punya databasenya sendiri, data antar akun terpisah total
+- 🗂️ **Daftar Akun** (khusus admin) — setujui, nonaktifkan sementara, atau hapus akun yang mendaftar
 - 📱 **Responsive** — nyaman dipakai di HP maupun desktop
 - 👥 **Manajemen Customer** — simpan, edit, hapus data customer
 - 🧾 **Invoice Otomatis** — format `No.01/III/DRM/2025`, increment per hari
@@ -52,58 +54,70 @@ npm install
 2. Klik **Get started**
 3. Pada tab **Sign-in method**, pilih **Email/Password** → aktifkan (Enable) → **Save**
 
-Setiap orang yang mendaftar sendiri (tab **"Daftar"** di halaman login) akan
-otomatis menjadi satu akun Firebase Auth dengan UID unik, dan seluruh
-datanya (pengaturan, customer, invoice) disimpan terpisah di Firestore pada
-path `users/{uid}/...` — akun lain tidak bisa mengakses data akun tersebut.
+Aplikasi ini memakai **satu sistem login** untuk semua orang, semuanya lewat
+Firebase Authentication (email & password asli, di-hash & dikelola oleh
+Google — jauh lebih aman dibanding password polos yang tersimpan sebagai
+teks di Firestore). Bedanya cuma satu email khusus:
 
-Aplikasi juga tetap punya **Login Utama** (tab **"Login Utama"**) yang
-memakai password lama (disimpan di `config/auth`) dan **database lama**
-(`config/`, `customers/`, `invoices/` di level atas) — data yang sudah ada
-sebelumnya **tidak hilang / tidak dipindah**. Login Utama ini berfungsi
-sebagai akun admin: dashboardnya punya menu tambahan **"Daftar Akun"** untuk
-melihat, menonaktifkan sementara, atau menghapus akun-akun yang mendaftar
-sendiri. Akun yang mendaftar sendiri tidak melihat menu ini.
+- **Admin / Login Utama** — akun dengan email **persis sama** dengan
+  `VITE_ADMIN_EMAIL` di `.env` otomatis dikenali sebagai admin. Sesi ini
+  memakai **database lama** (`config/`, `customers/`, `invoices/` di level
+  atas) — data yang sudah ada sebelumnya **tidak hilang / tidak dipindah**.
+  Dashboard admin punya menu tambahan **"Daftar Akun"** untuk menyetujui,
+  menonaktifkan sementara, atau menghapus akun lain.
+- **Akun biasa** — siapa saja yang daftar lewat tab **"Daftar Akun"**.
+  Datanya disimpan terpisah di `users/{uid}/...`. Akun baru **berstatus
+  "Menunggu Persetujuan"** dan tidak bisa login sampai admin klik
+  **Setujui** di menu Daftar Akun. Akun biasa tidak melihat menu ini.
+
+**Membuat akun admin pertama kali:** cukup daftar seperti biasa lewat tab
+"Daftar Akun" menggunakan email yang sama dengan `VITE_ADMIN_EMAIL` — akun
+ini otomatis langsung aktif tanpa perlu approval (karena dialah adminnya).
 
 #### Atur Firestore Rules
 
-Di tab **Rules**, ganti isi dengan:
+Di tab **Rules**, ganti isi dengan (ganti `admin@email-anda.com` dengan
+email admin Anda yang sebenarnya, **huruf kecil semua**, harus SAMA PERSIS
+dengan `VITE_ADMIN_EMAIL` di `.env`):
 
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'admin@email-anda.com';
+    }
+
     // ── Database lama / Login Utama (config, customers, invoices) ──
-    // Diakses lewat password admin di app (bukan Firebase Auth),
-    // jadi dibuka untuk publik seperti sebelumnya.
+    // Hanya bisa diakses oleh akun dengan email admin di atas.
     match /config/{doc} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
     match /customers/{doc} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
     match /invoices/{doc} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
 
     // ── Direktori akun terdaftar ──
-    // Siapa saja yang login boleh baca (untuk cek status aktif/nonaktif),
-    // tapi hanya pemilik akun yang boleh membuat dokumennya sendiri saat
-    // daftar. Update/hapus (nonaktifkan/hapus akun) dilakukan lewat Login
-    // Utama yang aksesnya dibuka di sini demi kesederhanaan (app ini
-    // tidak memakai Firebase Auth untuk Login Utama).
+    // Pemilik akun boleh baca statusnya sendiri (utk cek pending/disabled),
+    // admin boleh baca semua. Hanya pemilik yang boleh membuat dokumennya
+    // sendiri saat daftar. Approve/nonaktifkan/hapus hanya lewat admin.
     match /accounts/{uid} {
-      allow read: if true;
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow create: if request.auth != null && request.auth.uid == uid;
-      allow update, delete: if true;
+      allow update, delete: if isAdmin();
     }
 
     // ── Data per akun terdaftar sendiri ──
-    // Setiap akun hanya boleh membaca/menulis data di bawah
-    // path users/{uid}/... miliknya sendiri (uid = ID akun Firebase Auth).
+    // Pemilik akun ATAU admin boleh membaca/menulis (admin butuh akses ini
+    // supaya bisa menghapus data saat menghapus akun dari menu Daftar Akun).
     match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
     }
   }
 }
@@ -111,12 +125,10 @@ service cloud.firestore {
 
 Klik **Publish**.
 
-> ⚠️ Rules `allow update, delete: if true` pada `accounts/{uid}` dan akses
-> publik pada `config/customers/invoices` mengikuti pendekatan Login Utama
-> yang tidak memakai Firebase Auth (sama seperti versi sebelumnya). Ini
-> cukup untuk kebutuhan internal tim kecil; jika ingin lebih aman, Login
-> Utama sebaiknya dimigrasikan juga ke Firebase Auth dengan custom claim
-> admin di masa depan.
+> ✅ Rules di atas memverifikasi identitas admin lewat token Firebase Auth
+> yang ditandatangani server Google — **tidak bisa dipalsukan dari sisi
+> client**, jauh lebih aman dibanding password polos yang sebelumnya
+> tersimpan sebagai teks biasa di Firestore.
 
 #### Dapatkan Firebase Config
 
@@ -143,6 +155,10 @@ VITE_FIREBASE_PROJECT_ID=dearma-invoice
 VITE_FIREBASE_STORAGE_BUCKET=dearma-invoice.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abc123
+
+# Email admin (Login Utama) — HARUS sama persis (huruf kecil semua)
+# dengan email yang dipakai di Firestore Rules
+VITE_ADMIN_EMAIL=admin@email-anda.com
 ```
 
 > 🚫 Jangan pernah upload file `.env` ke GitHub! Sudah ada di `.gitignore`.
@@ -157,18 +173,21 @@ npm run dev
 
 Buka browser ke `http://localhost:5173`
 
-**Login Utama (Admin / data lama):**
-- Klik tab **"Login Utama"** di halaman login
-- Password default: `admin1234`
-- Bisa diubah di menu **Pengaturan → Ubah Password Login Utama**
-- Dashboard Login Utama punya menu tambahan **"Daftar Akun"** untuk mengelola
-  akun-akun yang mendaftar sendiri (nonaktifkan sementara / hapus)
+**Login Utama / Admin (data lama):**
+- Klik tab **"Daftar Akun"**, daftar memakai email yang sama persis dengan
+  `VITE_ADMIN_EMAIL` di `.env` → akun ini otomatis langsung aktif sebagai admin
+- Setelah itu login lewat tab **"Masuk"** seperti biasa
+- Dashboard admin punya menu tambahan **"Daftar Akun"** untuk menyetujui,
+  menonaktifkan sementara, atau menghapus akun-akun lain
+- Password bisa diubah di menu **Pengaturan → Ubah Password Login Utama**
 
-**Akun yang mendaftar sendiri (data terpisah per akun):**
-- Klik tab **"Daftar"** di halaman login, isi nama usaha, email, dan password
-  (minimal 6 karakter) untuk membuat akun baru
-- Setelah itu login lewat tab **"Masuk"**
-- Setiap akun yang mendaftar punya data invoice, customer, dan pengaturan
+**Akun biasa (data terpisah per akun):**
+- Klik tab **"Daftar Akun"**, isi nama usaha, email (bukan email admin), dan
+  password (minimal 6 karakter)
+- Setelah daftar, akun berstatus **"Menunggu Persetujuan"** — belum bisa login
+- Admin harus klik **Setujui** dulu di menu Daftar Akun
+- Setelah disetujui, login lewat tab **"Masuk"**
+- Setiap akun yang disetujui punya data invoice, customer, dan pengaturan
   masing-masing yang terpisah, dan **tidak** melihat menu "Daftar Akun"
 
 ---
@@ -246,22 +265,22 @@ dearma-invoice/
 
 ---
 
-## 🗃️ Struktur Database Firestore (Login Utama + Multi-akun)
+## 🗃️ Struktur Database Firestore (Admin + Multi-akun)
 
 ```
 firestore/
 ├── config/
-│   ├── settings             # Pengaturan Login Utama (data lama, TIDAK berubah)
-│   └── auth                 # Password Login Utama
+│   └── settings              # Pengaturan Login Utama / Admin (data lama, TIDAK berubah)
 ├── customers/
-│   └── {customerId}         # Data customer milik Login Utama (data lama)
+│   └── {customerId}          # Data customer milik Admin (data lama)
 ├── invoices/
-│   └── {invoiceId}          # Data invoice milik Login Utama (data lama)
+│   └── {invoiceId}           # Data invoice milik Admin (data lama)
 │
 ├── accounts/
-│   └── {uid}                # Direktori akun yang mendaftar sendiri:
-│                             #   { uid, email, displayName, disabled, createdAt }
-│                             # Dipakai halaman "Daftar Akun" di Login Utama
+│   └── {uid}                 # Direktori akun yang mendaftar sendiri:
+│                              #   { uid, email, displayName, status, createdAt }
+│                              #   status: 'pending' | 'active' | 'disabled'
+│                              # Dipakai halaman "Daftar Akun" di dashboard Admin
 │
 └── users/
     └── {uid}/                  # ID unik tiap akun (dari Firebase Auth)
@@ -273,17 +292,24 @@ firestore/
             └── {invoiceId}     # Data invoice — khusus akun ini
 ```
 
-Login Utama selalu memakai `config/`, `customers/`, `invoices/` di level
-atas (data lama, tidak pernah dipindah/hilang). Setiap akun yang mendaftar
-sendiri lewat tab "Daftar" punya salinan struktur yang sama tapi di bawah
-`users/{uid}/...`, terisolasi dari akun lain maupun dari Login Utama.
+Akun admin (email = `VITE_ADMIN_EMAIL`) selalu memakai `config/`,
+`customers/`, `invoices/` di level atas (data lama, tidak pernah
+dipindah/hilang). Setiap akun biasa yang disetujui admin punya salinan
+struktur yang sama tapi di bawah `users/{uid}/...`, terisolasi dari akun
+lain maupun dari data admin.
+
+**Alur approval:** saat daftar, dokumen `accounts/{uid}` dibuat dengan
+`status: 'pending'`. Akun ini akan otomatis di-sign-out & ditolak login
+sampai admin mengubah statusnya jadi `'active'` lewat tombol **Setujui**
+di menu Daftar Akun.
 
 **Batasan menghapus akun:** tombol "Hapus" di menu Daftar Akun menghapus
-seluruh data Firestore akun tsb dan mengunci (disable) supaya tidak bisa
-login lagi. Menghapus kredensial login-nya secara permanen dari Firebase
-Authentication memerlukan Firebase Admin SDK di server (Cloud Function)
-karena aplikasi client tidak diizinkan menghapus akun pengguna lain demi
-keamanan — bisa ditambahkan sebagai pengembangan lanjutan bila diperlukan.
+seluruh data Firestore akun tsb dan mengunci (`status: 'disabled'`) supaya
+tidak bisa login lagi. Menghapus kredensial login-nya secara permanen dari
+Firebase Authentication memerlukan Firebase Admin SDK di server (Cloud
+Function) karena aplikasi client tidak diizinkan menghapus akun pengguna
+lain demi keamanan — bisa ditambahkan sebagai pengembangan lanjutan bila
+diperlukan.
 
 ---
 
@@ -307,13 +333,19 @@ Contoh: `No.03/VII/DRM/2025`
 A: Pastikan browser mengizinkan popup. Izinkan popup untuk domain Vercel kamu.
 
 **Q: Data tidak tersimpan / error permission-denied?**  
-A: Cek console browser. Pastikan Authentication → Sign-in method → Email/Password sudah **Enable**, dan Firestore Rules sudah sesuai contoh di atas (akses dibatasi per `uid`).
+A: Cek console browser. Pastikan Authentication → Sign-in method → Email/Password sudah **Enable**, dan Firestore Rules sudah sesuai contoh di atas — terutama pastikan `VITE_ADMIN_EMAIL` di `.env` **sama persis (huruf kecil semua)** dengan email di dalam fungsi `isAdmin()` pada Firestore Rules.
 
 **Q: Bagaimana cara reset password jika lupa?**  
-A: Buka Firebase Console → Authentication → tab **Users** → cari akun berdasarkan email → klik menu titik tiga → **Reset password** (Firebase akan mengirim email reset), atau gunakan fitur "Lupa Password" bila ditambahkan di aplikasi.
+A: Buka Firebase Console → Authentication → tab **Users** → cari akun berdasarkan email → klik menu titik tiga → **Reset password** (Firebase akan mengirim email reset).
 
 **Q: Bisakah satu akun melihat data akun lain?**  
-A: Tidak. Firestore Rules membatasi setiap akun hanya bisa membaca/menulis data di path `users/{uid}/...` miliknya sendiri.
+A: Tidak. Firestore Rules membatasi setiap akun hanya bisa membaca/menulis data di path `users/{uid}/...` miliknya sendiri. Hanya akun admin yang bisa mengakses semua data (untuk keperluan kelola akun).
+
+**Q: Akun baru daftar tapi tidak bisa langsung login?**  
+A: Ini disengaja — setiap akun baru (selain email admin) berstatus "Menunggu Persetujuan" dan wajib disetujui admin dulu di menu **Daftar Akun** sebelum bisa login.
+
+**Q: Tombol "Hapus" di Daftar Akun tidak berfungsi / error permission?**  
+A: Pastikan Rules sudah diperbarui ke versi terbaru (dengan `isAdmin()`) dan Anda login memakai email yang sama persis dengan `VITE_ADMIN_EMAIL`. Rules versi lama (password-based) tidak mengizinkan admin menghapus data `users/{uid}/...` milik akun lain.
 
 ---
 

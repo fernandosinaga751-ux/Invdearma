@@ -23,9 +23,7 @@ const cfg = {
 const app = getApps().length ? getApps()[0] : initializeApp(cfg);
 // Matikan offline cache → paksa baca langsung dari server Firebase.
 // experimentalAutoDetectLongPolling: mengatasi error WebChannel 400 /
-// koneksi macet yang sering terjadi di jaringan tertentu (proxy, firewall,
-// hosting) dengan otomatis beralih ke mode long-polling saat streaming
-// biasa gagal/tidak stabil.
+// koneksi macet yang sering terjadi di jaringan tertentu.
 const db = initializeFirestore(app, {
   localCache: memoryLocalCache(),
   experimentalAutoDetectLongPolling: true,
@@ -34,16 +32,30 @@ const db = initializeFirestore(app, {
 const auth = getAuth(app);
 export { db, auth };
 
+function withTimeout(promise, ms = 10000) {
+  const t = new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), ms));
+  return Promise.race([promise, t]);
+}
+
+// Email admin (Login Utama) — diset lewat Environment Variable.
+// Akun Firebase Auth dengan email PERSIS sama ini otomatis diperlakukan
+// sebagai admin: memakai database lama (config/customers/invoices di
+// level atas) dan bisa mengelola akun lain di menu "Daftar Akun".
+const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+
 // ─────────────────────────────────────────────────────────────────
 // SESI AKTIF
-// Ada 2 jenis sesi:
-//  - 'master'  → Login Utama (password lama), memakai DATABASE LAMA
+//  - 'master'  → email login = VITE_ADMIN_EMAIL, memakai DATABASE LAMA
 //                 di path atas: config/, customers/, invoices/
 //                 (data yang sudah ada sebelumnya, TIDAK dipindah/hilang)
-//  - 'account' → akun yang daftar sendiri lewat Firebase Auth, datanya
-//                 disimpan terpisah di users/{uid}/...
+//  - 'account' → akun yang daftar sendiri, datanya disimpan terpisah
+//                 di users/{uid}/..., dan harus di-approve admin dulu
+//                 sebelum bisa login.
+// Keduanya SAMA-SAMA login lewat Firebase Authentication (email &
+// password asli, di-hash & dikelola oleh Google) — jauh lebih aman
+// dibanding password polos yang dulu tersimpan di Firestore.
 // ─────────────────────────────────────────────────────────────────
-let session = null; // { kind: 'master' } | { kind: 'account', uid }
+let session = null; // { kind: 'master', uid } | { kind: 'account', uid }
 
 export function getSessionKind() { return session?.kind || null; }
 export function clearActiveSession() { session = null; }
@@ -56,106 +68,81 @@ function basePath() {
 function sDoc(...parts) { return doc(db, ...basePath(), ...parts); }
 function sCol(...parts) { return collection(db, ...basePath(), ...parts); }
 
-// ─── LOGIN UTAMA (database lama, password lama) ────────────────
-const MASTER_FLAG = 'dearma_master_session';
-
-function withTimeout(promise, ms = 10000) {
-  const t = new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), ms));
-  return Promise.race([promise, t]);
-}
-
-export async function getMasterPassword() {
-  try {
-    const s = await withTimeout(getDoc(doc(db, 'config', 'auth')));
-    return s.exists() ? s.data().password : 'admin1234';
-  } catch { return 'admin1234'; }
-}
-export async function saveMasterPassword(pw) {
-  await withTimeout(setDoc(doc(db, 'config', 'auth'), { password: pw }));
-}
-export async function loginMaster(pw) {
-  let real;
-  try {
-    const s = await withTimeout(getDoc(doc(db, 'config', 'auth')));
-    real = s.exists() ? s.data().password : 'admin1234';
-  } catch (e) {
-    if (e.message === 'TIMEOUT') {
-      throw new Error('Koneksi ke Firebase macet/timeout. Periksa koneksi internet atau coba refresh halaman.');
-    }
-    throw new Error('Gagal menghubungi Firebase: ' + e.message);
-  }
-  if (pw !== real) throw new Error('WRONG_PASSWORD');
-  session = { kind: 'master' };
-  try { localStorage.setItem(MASTER_FLAG, '1'); } catch {}
-}
-export function restoreMasterSessionIfAny() {
-  try {
-    if (localStorage.getItem(MASTER_FLAG) === '1') {
-      session = { kind: 'master' };
-      return true;
-    }
-  } catch {}
-  return false;
-}
-export function logoutMaster() {
-  try { localStorage.removeItem(MASTER_FLAG); } catch {}
-  if (session?.kind === 'master') session = null;
-}
-
-// ─── AKUN TERDAFTAR (Firebase Authentication) ──────────────────
-// Direktori ringan berisi daftar akun terdaftar, disimpan di
-// koleksi top-level `accounts/{uid}` supaya Login Utama bisa
-// menampilkan & mengelola (nonaktifkan / hapus) tanpa perlu
-// Firebase Admin SDK di server.
+// ─── AUTH: Firebase Authentication (Login Utama & Akun) ─────────
 export function watchAuthState(callback) {
   return onAuthStateChanged(auth, callback);
 }
 
-async function bindAndVerifyAccount(fbUser) {
-  const reg = await getDoc(doc(db, 'accounts', fbUser.uid));
-  if (reg.exists() && reg.data().disabled) {
+// Dipanggil setiap kali ada user Firebase Auth aktif (baru login atau
+// sesi lama yang dipulihkan saat reload). Menentukan jenis sesi
+// (master/account) dan memverifikasi status akun (pending/disabled).
+export async function bindAndVerifyAccount(fbUser) {
+  const email = (fbUser.email || '').toLowerCase();
+
+  if (ADMIN_EMAIL && email === ADMIN_EMAIL) {
+    session = { kind: 'master', uid: fbUser.uid };
+    return { kind: 'master' };
+  }
+
+  const reg = await withTimeout(getDoc(doc(db, 'accounts', fbUser.uid)));
+  const status = reg.exists() ? (reg.data().status || 'active') : 'active';
+
+  if (status === 'pending') {
+    await signOut(auth);
+    throw new Error('ACCOUNT_PENDING');
+  }
+  if (status === 'disabled') {
     await signOut(auth);
     throw new Error('ACCOUNT_DISABLED');
   }
   session = { kind: 'account', uid: fbUser.uid };
+  return { kind: 'account' };
 }
-export { bindAndVerifyAccount };
 
 export async function registerAccount(email, password, displayName) {
-  const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+  const emailTrim = email.trim();
+  const cred = await createUserWithEmailAndPassword(auth, emailTrim, password);
   if (displayName) {
     await updateProfile(cred.user, { displayName: displayName.trim() });
   }
+
+  const isAdmin = ADMIN_EMAIL && emailTrim.toLowerCase() === ADMIN_EMAIL;
+
   await setDoc(doc(db, 'accounts', cred.user.uid), {
     uid: cred.user.uid,
-    email: email.trim(),
+    email: emailTrim,
     displayName: displayName?.trim() || '',
-    disabled: false,
+    status: isAdmin ? 'active' : 'pending',
     createdAt: new Date().toISOString(),
   });
-  session = { kind: 'account', uid: cred.user.uid };
+
+  if (isAdmin) {
+    session = { kind: 'master', uid: cred.user.uid };
+    await setDoc(doc(db, 'config', 'settings'), {
+      companyName: displayName?.trim() || '',
+    }, { merge: true });
+    return { pending: false, kind: 'master', user: cred.user };
+  }
+
+  // Akun biasa: siapkan settings-nya, tapi tetap harus menunggu approve admin
   await setDoc(doc(db, 'users', cred.user.uid, 'config', 'settings'), {
     companyName: displayName?.trim() || '',
   }, { merge: true });
-  return cred.user;
+
+  await signOut(auth);
+  session = null;
+  return { pending: true };
 }
 
 export async function loginAccount(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-  try {
-    await bindAndVerifyAccount(cred.user);
-  } catch (e) {
-    if (e.message === 'ACCOUNT_DISABLED') {
-      throw new Error('ACCOUNT_DISABLED');
-    }
-    throw e;
-  }
+  await bindAndVerifyAccount(cred.user); // melempar error kalau pending/disabled
   return cred.user;
 }
 
-export async function logoutAccount() {
+export async function logoutSession() {
   await signOut(auth);
-  if (session?.kind === 'account') session = null;
+  session = null;
 }
 
 export async function changeAccountPassword(newPassword) {
@@ -163,28 +150,30 @@ export async function changeAccountPassword(newPassword) {
   await updatePassword(auth.currentUser, newPassword);
 }
 
-// ─── PENGELOLAAN AKUN (khusus Login Utama / master) ─────────────
+// ─── PENGELOLAAN AKUN (khusus admin / Login Utama) ──────────────
 export async function getAllAccounts() {
   const s = await getDocs(collection(db, 'accounts'));
   return s.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 }
-export async function setAccountDisabled(uid, disabled) {
-  await updateDoc(doc(db, 'accounts', uid), { disabled });
+export async function approveAccount(uid) {
+  await updateDoc(doc(db, 'accounts', uid), { status: 'active' });
+}
+export async function setAccountStatus(uid, status) {
+  await updateDoc(doc(db, 'accounts', uid), { status });
 }
 export async function deleteAccountCompletely(uid) {
   // Menghapus seluruh data Firestore milik akun ini (settings, customers,
-  // invoices) serta entri direktorinya, dan mengunci akun (disabled)
-  // sehingga tidak bisa login lagi.
+  // invoices) serta entri direktorinya, dan mengunci akun (status
+  // 'disabled') sehingga tidak bisa login lagi.
   //
   // Catatan: menghapus akun *login* (Firebase Authentication) itu sendiri
   // secara permanen memerlukan Firebase Admin SDK di server (Cloud
   // Function) karena alasan keamanan — client app tidak diizinkan
   // menghapus akun pengguna lain. Fungsi ini sudah memblokir login akun
-  // tsb (disabled) dan menghapus seluruh datanya secara permanen, yang
-  // secara praktis membuat akun tersebut tidak bisa dipakai lagi.
-  await setDoc(doc(db, 'accounts', uid), { disabled: true }, { merge: true });
+  // tsb dan menghapus seluruh datanya secara permanen.
+  await setDoc(doc(db, 'accounts', uid), { status: 'disabled' }, { merge: true });
 
   const custSnap = await getDocs(collection(db, 'users', uid, 'customers'));
   await Promise.all(custSnap.docs.map(d => deleteDoc(d.ref)));

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Card, Input, Btn } from '../components/UI.jsx';
 import { toB64 } from '../lib/utils.js';
-import { saveSettings as fbSaveSettings, changeAccountPassword, saveMasterPassword } from '../lib/firebase.js';
+import { saveSettings as fbSaveSettings, changeAccountPassword } from '../lib/firebase.js';
 
 export default function Settings({ settings, setSettings, sessionKind, fbUser }) {
   const [form, setForm]     = useState({ ...settings });
@@ -34,15 +34,9 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
   const handlePw = async () => {
     if (!newPw.trim())    return setPwMsg('❌ Password baru tidak boleh kosong!');
     if (newPw !== confPw) return setPwMsg('❌ Konfirmasi password tidak cocok!');
-    if (newPw.length < (sessionKind === 'master' ? 4 : 6)) {
-      return setPwMsg(`❌ Password minimal ${sessionKind === 'master' ? 4 : 6} karakter!`);
-    }
+    if (newPw.length < 6) return setPwMsg('❌ Password minimal 6 karakter!');
     try {
-      if (sessionKind === 'master') {
-        await saveMasterPassword(newPw);
-      } else {
-        await changeAccountPassword(newPw);
-      }
+      await changeAccountPassword(newPw);
       setNewPw(''); setConfPw('');
       setPwMsg('✅ Password berhasil diubah!');
       setTimeout(() => setPwMsg(''), 3000);
@@ -127,18 +121,15 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
         <h3 className="font-bold text-[#0f2544] mb-4 text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>
           Akun Saya
         </h3>
-        {sessionKind === 'master' ? (
-          <div className="text-sm text-slate-600 space-y-1">
-            <div><span className="font-bold text-slate-400">Jenis Sesi:</span> Login Utama (Admin / Database Lama)</div>
-          </div>
-        ) : (
-          <div className="text-sm text-slate-600 space-y-1">
-            <div><span className="font-bold text-slate-400">Email:</span> {fbUser?.email}</div>
-            {fbUser?.displayName && (
-              <div><span className="font-bold text-slate-400">Nama:</span> {fbUser.displayName}</div>
-            )}
-          </div>
-        )}
+        <div className="text-sm text-slate-600 space-y-1">
+          <div><span className="font-bold text-slate-400">Email:</span> {fbUser?.email}</div>
+          {fbUser?.displayName && (
+            <div><span className="font-bold text-slate-400">Nama:</span> {fbUser.displayName}</div>
+          )}
+          {sessionKind === 'master' && (
+            <div><span className="font-bold text-slate-400">Peran:</span> Admin (Login Utama / Database Lama)</div>
+          )}
+        </div>
         <p className="text-xs text-slate-400 mt-3">
           Data invoice, customer, dan pengaturan di sini hanya bisa diakses lewat sesi login ini.
         </p>

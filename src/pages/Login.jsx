@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import { useState } from 'react';
 import { Btn, Input } from '../components/UI.jsx';
-import { loginAccount, registerAccount, loginMaster } from '../lib/firebase.js';
+import { loginAccount, registerAccount } from '../lib/firebase.js';
 
 function friendlyError(code) {
   const map = {
@@ -17,34 +17,20 @@ function friendlyError(code) {
   return map[code] || 'Terjadi kesalahan. Silakan coba lagi.';
 }
 
-export default function Login({ settings, onMasterLogin }) {
-  const [mode, setMode]       = useState('master'); // 'master' | 'login' | 'register'
+export default function Login({ settings }) {
+  const [mode, setMode]       = useState('login'); // 'login' | 'register'
   const [name, setName]       = useState('');
   const [email, setEmail]     = useState('');
   const [pw, setPw]           = useState('');
   const [pw2, setPw2]         = useState('');
-  const [masterPw, setMasterPw] = useState('');
   const [err, setErr]         = useState('');
+  const [info, setInfo]       = useState('');
   const [loading, setLoading] = useState(false);
 
-  const switchMode = m => { setMode(m); setErr(''); };
-
-  const handleMaster = async () => {
-    setErr('');
-    if (!masterPw) { setErr('❌ Password wajib diisi!'); return; }
-    setLoading(true);
-    try {
-      await loginMaster(masterPw);
-      onMasterLogin?.();
-    } catch (e) {
-      setErr(e.message === 'WRONG_PASSWORD' ? '❌ Password salah!' : '❌ ' + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const switchMode = m => { setMode(m); setErr(''); setInfo(''); };
 
   const handle = async () => {
-    setErr('');
+    setErr(''); setInfo('');
     if (!email.trim() || !pw) { setErr('❌ Email dan password wajib diisi!'); return; }
 
     if (mode === 'register') {
@@ -57,25 +43,34 @@ export default function Login({ settings, onMasterLogin }) {
     try {
       if (mode === 'login') {
         await loginAccount(email, pw);
+        // Setelah berhasil, App.jsx otomatis mendeteksi perubahan status
+        // login (onAuthStateChanged) dan memuat data khusus sesi ini.
       } else {
-        await registerAccount(email, pw, name);
+        const res = await registerAccount(email, pw, name);
+        if (res.pending) {
+          setInfo('✅ Akun berhasil didaftarkan! Silakan tunggu persetujuan dari admin sebelum bisa login.');
+          setMode('login');
+          setEmail(email.trim()); setPw(''); setPw2(''); setName('');
+        }
+        // kalau res.pending === false → ini akun admin, App.jsx otomatis lanjut
       }
-      // Setelah berhasil, App.jsx otomatis mendeteksi perubahan status
-      // login (onAuthStateChanged) dan memuat data khusus akun ini.
     } catch (e) {
-      if (e.message === 'ACCOUNT_DISABLED') {
+      if (e.message === 'ACCOUNT_PENDING') {
+        setErr('⏳ Akun Anda masih menunggu persetujuan admin. Silakan coba lagi nanti.');
+      } else if (e.message === 'ACCOUNT_DISABLED') {
         setErr('❌ Akun ini telah dinonaktifkan sementara. Hubungi admin.');
+      } else if (e.message === 'TIMEOUT') {
+        setErr('❌ Koneksi ke Firebase macet/timeout. Periksa koneksi internet lalu coba lagi.');
       } else {
         setErr('❌ ' + friendlyError(e.code));
       }
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4"
+      className="min-h-screen flex items-center justify-center p-4 relative"
       style={{ background: 'linear-gradient(135deg,#0f2544 0%,#1e4080 55%,#2d5fa8 100%)' }}
     >
       {/* Grid pattern */}
@@ -106,100 +101,75 @@ export default function Login({ settings, onMasterLogin }) {
           <p className="text-slate-400 text-sm mt-1">Sistem Invoice & Kwitansi</p>
         </div>
 
-        {/* Tab: Login Utama / Masuk / Daftar */}
-        <div className="flex bg-slate-100 rounded-xl p-1 mb-6 text-[11px] sm:text-sm">
-          <button
-            onClick={() => switchMode('master')}
-            className={`flex-1 py-2 rounded-lg font-bold transition-all
-              ${mode === 'master' ? 'bg-white shadow text-[#0f2544]' : 'text-slate-400'}`}
-          >
-            Login Utama
-          </button>
+        {/* Tab: Masuk / Daftar */}
+        <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
           <button
             onClick={() => switchMode('login')}
-            className={`flex-1 py-2 rounded-lg font-bold transition-all
+            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all
               ${mode === 'login' ? 'bg-white shadow text-[#0f2544]' : 'text-slate-400'}`}
           >
             Masuk
           </button>
           <button
             onClick={() => switchMode('register')}
-            className={`flex-1 py-2 rounded-lg font-bold transition-all
+            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all
               ${mode === 'register' ? 'bg-white shadow text-[#0f2544]' : 'text-slate-400'}`}
           >
-            Daftar
+            Daftar Akun
           </button>
         </div>
 
-        {mode === 'master' && (
-          <div className="space-y-4">
+        <div className="space-y-4">
+          {mode === 'register' && (
             <Input
-              label="Password Login Utama"
+              label="Nama Usaha / Pemilik"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="mis. Dearma Rental Mobil Medan"
+            />
+          )}
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && mode === 'login' && handle()}
+            placeholder="email@usaha-anda.com"
+          />
+          <Input
+            label="Password"
+            type="password"
+            value={pw}
+            onChange={e => setPw(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && mode === 'login' && handle()}
+            placeholder="••••••••"
+          />
+          {mode === 'register' && (
+            <Input
+              label="Konfirmasi Password"
               type="password"
-              value={masterPw}
-              onChange={e => setMasterPw(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleMaster()}
+              value={pw2}
+              onChange={e => setPw2(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handle()}
               placeholder="••••••••"
             />
-            {err && <p className="text-red-500 text-sm bg-red-50 rounded-xl px-4 py-2.5">{err}</p>}
-            <Btn onClick={handleMaster} disabled={loading} className="w-full justify-center py-3 text-base">
-              {loading ? '⏳ Memeriksa...' : '🔐 Masuk sebagai Admin'}
-            </Btn>
-            <p className="text-center text-xs text-slate-400">
-              Untuk akses database utama (data lama) &amp; kelola akun terdaftar.
-            </p>
-          </div>
-        )}
-
-        {mode !== 'master' && (
-          <div className="space-y-4">
-            {mode === 'register' && (
-              <Input
-                label="Nama Usaha / Pemilik"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="mis. Dearma Rental Mobil Medan"
-              />
-            )}
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && mode === 'login' && handle()}
-              placeholder="email@usaha-anda.com"
-            />
-            <Input
-              label="Password"
-              type="password"
-              value={pw}
-              onChange={e => setPw(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && mode === 'login' && handle()}
-              placeholder="••••••••"
-            />
-            {mode === 'register' && (
-              <Input
-                label="Konfirmasi Password"
-                type="password"
-                value={pw2}
-                onChange={e => setPw2(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handle()}
-                placeholder="••••••••"
-              />
-            )}
-            {err && (
-              <p className="text-red-500 text-sm bg-red-50 rounded-xl px-4 py-2.5">{err}</p>
-            )}
-            <Btn onClick={handle} disabled={loading} className="w-full justify-center py-3 text-base">
-              {loading
-                ? '⏳ Memproses...'
-                : (mode === 'login' ? '🔐 Masuk ke Sistem' : '✨ Buat Akun Baru')}
-            </Btn>
-          </div>
-        )}
+          )}
+          {err && (
+            <p className="text-red-500 text-sm bg-red-50 rounded-xl px-4 py-2.5">{err}</p>
+          )}
+          {info && (
+            <p className="text-emerald-600 text-sm bg-emerald-50 rounded-xl px-4 py-2.5">{info}</p>
+          )}
+          <Btn onClick={handle} disabled={loading} className="w-full justify-center py-3 text-base">
+            {loading
+              ? '⏳ Memproses...'
+              : (mode === 'login' ? '🔐 Masuk ke Sistem' : '✨ Daftar Akun Baru')}
+          </Btn>
+        </div>
 
         <p className="text-center text-xs text-slate-300 mt-6">
-          Setiap akun memiliki data invoice, customer &amp; pengaturan sendiri-sendiri.
+          Akun baru perlu disetujui admin sebelum bisa login. Setiap akun punya
+          data invoice, customer &amp; pengaturan sendiri-sendiri.
         </p>
         <p className="text-center text-xs text-slate-300 mt-1">
           © {new Date().getFullYear()} {settings?.companyName || 'Dearma Rental Mobil Medan'}

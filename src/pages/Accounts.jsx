@@ -1,13 +1,19 @@
 // src/pages/Accounts.jsx
 import { useState, useEffect } from 'react';
 import { Card, Btn, Badge, Icons } from '../components/UI.jsx';
-import { getAllAccounts, setAccountDisabled, deleteAccountCompletely } from '../lib/firebase.js';
+import { getAllAccounts, approveAccount, setAccountStatus, deleteAccountCompletely } from '../lib/firebase.js';
 
 function formatDate(iso) {
   if (!iso) return '-';
   try {
     return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   } catch { return iso; }
+}
+
+function StatusBadge({ status }) {
+  if (status === 'pending')  return <Badge color="amber">Menunggu Persetujuan</Badge>;
+  if (status === 'disabled') return <Badge color="red">Nonaktif</Badge>;
+  return <Badge color="green">Aktif</Badge>;
 }
 
 export default function Accounts() {
@@ -30,11 +36,25 @@ export default function Accounts() {
 
   useEffect(() => { load(); }, []);
 
-  const handleToggle = async (acc) => {
+  const pendingCount = accounts.filter(a => a.status === 'pending').length;
+
+  const handleApprove = async (acc) => {
     setBusyId(acc.id);
     try {
-      await setAccountDisabled(acc.id, !acc.disabled);
-      setAccounts(list => list.map(a => a.id === acc.id ? { ...a, disabled: !acc.disabled } : a));
+      await approveAccount(acc.id);
+      setAccounts(list => list.map(a => a.id === acc.id ? { ...a, status: 'active' } : a));
+    } catch (e) {
+      alert('Gagal menyetujui akun: ' + e.message);
+    }
+    setBusyId(null);
+  };
+
+  const handleToggle = async (acc) => {
+    const next = acc.status === 'disabled' ? 'active' : 'disabled';
+    setBusyId(acc.id);
+    try {
+      await setAccountStatus(acc.id, next);
+      setAccounts(list => list.map(a => a.id === acc.id ? { ...a, status: next } : a));
     } catch (e) {
       alert('Gagal mengubah status akun: ' + e.message);
     }
@@ -65,17 +85,18 @@ export default function Accounts() {
             Daftar Akun
           </h1>
           <p className="text-slate-400 text-sm">
-            {accounts.length} akun terdaftar &middot; kelola akun yang mendaftar sendiri di halaman login
+            {accounts.length} akun terdaftar
+            {pendingCount > 0 && <span className="text-amber-600 font-bold"> &middot; {pendingCount} menunggu persetujuan</span>}
           </p>
         </div>
         <Btn variant="ghost" onClick={load}>🔄 Muat Ulang</Btn>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-xl px-4 py-3">
-        ℹ️ Setiap akun di sini punya data invoice, customer &amp; pengaturan sendiri, terpisah dari
-        Login Utama. <strong>Nonaktifkan sementara</strong> memblokir akun agar tidak bisa login tanpa
-        menghapus datanya. <strong>Hapus</strong> mengunci akun secara permanen dan menghapus seluruh
-        datanya.
+        ℹ️ Akun yang baru daftar berstatus <strong>Menunggu Persetujuan</strong> dan tidak bisa login
+        sampai Anda klik <strong>Setujui</strong>. <strong>Nonaktifkan sementara</strong> memblokir akun
+        aktif agar tidak bisa login tanpa menghapus datanya. <strong>Hapus</strong> mengunci akun secara
+        permanen dan menghapus seluruh datanya.
       </div>
 
       {err && <p className="text-red-500 text-sm bg-red-50 rounded-xl px-4 py-2.5">{err}</p>}
@@ -105,21 +126,29 @@ export default function Accounts() {
                     <td className="px-5 py-3 font-bold text-[#0f2544]">{acc.displayName || '-'}</td>
                     <td className="px-5 py-3 text-slate-600">{acc.email}</td>
                     <td className="px-5 py-3 text-slate-500 text-xs">{formatDate(acc.createdAt)}</td>
-                    <td className="px-5 py-3">
-                      {acc.disabled
-                        ? <Badge color="red">Nonaktif</Badge>
-                        : <Badge color="green">Aktif</Badge>}
-                    </td>
+                    <td className="px-5 py-3"><StatusBadge status={acc.status} /></td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5 justify-end flex-wrap">
-                        <Btn
-                          variant={acc.disabled ? 'green' : 'amber'}
-                          className="text-xs px-3 py-1.5"
-                          disabled={busyId === acc.id}
-                          onClick={() => handleToggle(acc)}
-                        >
-                          {acc.disabled ? '✅ Aktifkan' : '⏸️ Nonaktifkan'}
-                        </Btn>
+                        {acc.status === 'pending' && (
+                          <Btn
+                            variant="green"
+                            className="text-xs px-3 py-1.5"
+                            disabled={busyId === acc.id}
+                            onClick={() => handleApprove(acc)}
+                          >
+                            ✅ Setujui
+                          </Btn>
+                        )}
+                        {acc.status !== 'pending' && (
+                          <Btn
+                            variant={acc.status === 'disabled' ? 'green' : 'amber'}
+                            className="text-xs px-3 py-1.5"
+                            disabled={busyId === acc.id}
+                            onClick={() => handleToggle(acc)}
+                          >
+                            {acc.status === 'disabled' ? '✅ Aktifkan' : '⏸️ Nonaktifkan'}
+                          </Btn>
+                        )}
                         <Btn
                           variant="danger"
                           className="text-xs px-3 py-1.5"

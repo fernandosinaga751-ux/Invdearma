@@ -77,7 +77,7 @@ export default function Sidebar({ page, setPage, onLogout, settings, sessionKind
         {/* Akun & Logout */}
         <div className="p-3 border-t border-white/10">
           <div className="px-3.5 py-2 mb-1 text-[11px] text-white/40 truncate" title={accountLabel}>
-            👤 {sessionKind === 'master' ? 'Login Utama (Admin)' : accountLabel}
+            👤 {accountLabel}{sessionKind === 'master' ? ' (Admin)' : ''}
           </div>
           <button
             onClick={onLogout}

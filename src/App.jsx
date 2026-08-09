@@ -13,8 +13,7 @@ import BlankReceipt from './pages/BlankReceipt.jsx';
 import BusinessCard from './pages/BusinessCard.jsx';
 import { DEF_SETTINGS } from './lib/utils.js';
 import {
-  watchAuthState, bindAndVerifyAccount,
-  restoreMasterSessionIfAny, logoutMaster, logoutAccount,
+  watchAuthState, bindAndVerifyAccount, logoutSession,
   getSettings, getCustomers, getInvoices,
 } from './lib/firebase.js';
 
@@ -34,7 +33,7 @@ export default function App() {
   const [page,           setPageState]     = useState('dashboard');
   const [authChecking,   setAuthChecking]  = useState(true);
   const [sessionKind,    setSessionKind]   = useState(null); // 'master' | 'account' | null
-  const [fbUser,         setFbUser]        = useState(null); // objek user Firebase Auth (hanya utk 'account')
+  const [fbUser,         setFbUser]        = useState(null); // objek user Firebase Auth
   const [dataLoading,    setDataLoading]   = useState(false);
   const [customers,      setCustomers]     = useState([]);
   const [invoices,       setInvoices]      = useState([]);
@@ -44,25 +43,20 @@ export default function App() {
   const [loadError,      setLoadError]     = useState('');
   const [sidebarOpen,    setSidebarOpen]   = useState(false);
 
-  // ── Deteksi sesi aktif saat pertama kali app dibuka ─────────────
+  // ── Pantau status login Firebase Auth (Login Utama & Akun) ──────
   useEffect(() => {
-    // 1) Prioritas: sesi Login Utama (master) yang tersimpan lokal
-    if (restoreMasterSessionIfAny()) {
-      setSessionKind('master');
-      setAuthChecking(false);
-      return;
-    }
-    // 2) Kalau tidak, pantau status login akun (Firebase Auth)
     const unsub = watchAuthState(async (u) => {
       if (u) {
         try {
-          await bindAndVerifyAccount(u);
+          const res = await bindAndVerifyAccount(u);
           setFbUser(u);
-          setSessionKind('account');
+          setSessionKind(res.kind);
         } catch (e) {
           setFbUser(null);
           setSessionKind(null);
-          if (e.message === 'ACCOUNT_DISABLED') {
+          if (e.message === 'ACCOUNT_PENDING') {
+            setLoadError('Akun ini masih menunggu persetujuan admin.');
+          } else if (e.message === 'ACCOUNT_DISABLED') {
             setLoadError('Akun ini telah dinonaktifkan sementara oleh admin.');
           }
         }
@@ -108,22 +102,12 @@ export default function App() {
     setPageState(p);
   };
 
-  const resetLocalState = () => {
-    setCustomers([]); setInvoices([]); setSettings(DEF_SETTINGS);
-    setPageState('dashboard'); setLoadError(''); setSidebarOpen(false);
-  };
-
-  const handleMasterLogin = () => {
-    setSessionKind('master');
-    resetLocalState();
-  };
-
   const handleLogout = async () => {
-    if (sessionKind === 'master') logoutMaster();
-    else await logoutAccount();
+    await logoutSession();
     setSessionKind(null);
     setFbUser(null);
-    resetLocalState();
+    setCustomers([]); setInvoices([]); setSettings(DEF_SETTINGS);
+    setPageState('dashboard'); setLoadError(''); setSidebarOpen(false);
   };
 
   // ── Memeriksa sesi login ────────────────────────────────────────
@@ -140,7 +124,16 @@ export default function App() {
   );
 
   // ── Belum login → tampilkan halaman Login ──────────────────────
-  if (!sessionKind) return <Login settings={settings} onMasterLogin={handleMasterLogin} />;
+  if (!sessionKind) return (
+    <>
+      <Login settings={settings} />
+      {loadError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-2xl px-5 py-3 text-sm text-red-600 max-w-sm text-center z-50">
+          ⚠️ {loadError}
+        </div>
+      )}
+    </>
+  );
 
   // ── Memuat data khusus sesi yang login ───────────────────────────
   if (dataLoading) return (
@@ -165,7 +158,7 @@ export default function App() {
         <p className="text-slate-600 text-sm mb-4 text-center">{loadError}</p>
         <div className="bg-slate-50 rounded-xl p-3 text-xs font-mono text-slate-500 space-y-1 mb-5">
           <div>✅ Cek Firestore Rules → akses per akun (lihat README)</div>
-          <div>✅ Cek file .env → Project ID benar</div>
+          <div>✅ Cek file .env → Project ID & VITE_ADMIN_EMAIL benar</div>
           <div>✅ Cek di Vercel → Environment Variables sudah diisi</div>
         </div>
         <button onClick={() => window.location.reload()}
