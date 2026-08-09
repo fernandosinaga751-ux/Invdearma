@@ -1,7 +1,7 @@
 // src/pages/Accounts.jsx
 import { useState, useEffect } from 'react';
 import { Card, Btn, Badge, Icons } from '../components/UI.jsx';
-import { getAllAccounts, approveAccount, setAccountStatus, deleteAccountCompletely } from '../lib/firebase.js';
+import { getAllAccounts, approveAccount, setAccountStatus, deleteAccountCompletely, removeAccountEntry } from '../lib/firebase.js';
 
 function formatDate(iso) {
   if (!iso) return '-';
@@ -92,6 +92,24 @@ export default function Accounts() {
     setBusyId(null);
   };
 
+  const handleRemoveEntry = async (acc) => {
+    const ok = confirm(
+      `Bersihkan "${acc.email}" dari daftar ini?\n\n` +
+      `HANYA lakukan ini kalau akunnya SUDAH dihapus manual lewat Firebase Console ` +
+      `→ Authentication. Kalau akun Auth-nya masih ada, dia bisa dianggap "aktif" lagi ` +
+      `saat mencoba login (karena catatannya sudah tidak ada).`
+    );
+    if (!ok) return;
+    setBusyId(acc.id);
+    try {
+      await removeAccountEntry(acc.id);
+      setAccounts(list => list.filter(a => a.id !== acc.id));
+    } catch (e) {
+      alert('Gagal membersihkan entri: ' + e.message);
+    }
+    setBusyId(null);
+  };
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -111,7 +129,8 @@ export default function Accounts() {
         ℹ️ Akun yang baru daftar berstatus <strong>Menunggu Persetujuan</strong> dan tidak bisa login
         sampai Anda klik <strong>Setujui</strong>. <strong>Nonaktifkan sementara</strong> memblokir akun
         aktif agar tidak bisa login tanpa menghapus datanya. <strong>Hapus</strong> mengunci akun secara
-        permanen dan menghapus seluruh datanya.
+        permanen dan menghapus seluruh datanya. <strong>Bersihkan dari Daftar</strong> cuma untuk
+        menghilangkan entri akun yang Auth-nya sudah dihapus manual lewat Firebase Console.
       </div>
 
       {err && <p className="text-red-500 text-sm bg-red-50 rounded-xl px-4 py-2.5">{err}</p>}
@@ -174,6 +193,15 @@ export default function Accounts() {
                             {Icons.trash} Hapus
                           </Btn>
                         )}
+                        <Btn
+                          variant="ghost"
+                          className="text-xs px-2 py-1.5 text-slate-400"
+                          disabled={busyId === acc.id}
+                          onClick={() => handleRemoveEntry(acc)}
+                          title="Pakai ini kalau akunnya sudah dihapus manual di Firebase Console → Authentication"
+                        >
+                          🧹 Bersihkan dari Daftar
+                        </Btn>
                       </div>
                     </td>
                   </tr>

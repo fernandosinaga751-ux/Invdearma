@@ -350,24 +350,28 @@ A: Pastikan Rules sudah diperbarui ke versi terbaru (dengan `isAdmin()`) dan And
 **Q: Akun yang sudah dihapus di panel masih bisa login lagi?**  
 A: Ini bug yang sudah diperbaiki — versi lama sempat menghapus dokumen direktori akun (`accounts/{uid}`) sepenuhnya saat "Hapus", padahal itu menyebabkan sistem menganggap akun tanpa dokumen = otomatis aktif kembali. Sekarang dokumen itu **tidak dihapus**, cuma ditandai `status: 'disabled'` secara permanen — pastikan Anda memakai versi kode terbaru.
 
-## ☁️ Cloud Function: Hapus Akun Permanen (Opsional)
+**Q: Sudah hapus akun manual di Firebase Console (Authentication), tapi masih muncul di halaman Daftar Akun?**  
+A: Wajar — Firestore (tempat data "Daftar Akun" disimpan) dan Firebase Authentication itu dua sistem terpisah, menghapus salah satunya tidak otomatis menghapus yang lain kecuali dihubungkan lewat Cloud Function. Ada 2 opsi:
+1. **Cepat:** klik tombol **"🧹 Bersihkan dari Daftar"** di baris akun tsb — ini langsung menghapus entrinya dari Firestore tanpa menyentuh Firebase Auth (aman dipakai justru karena Auth-nya memang sudah tidak ada).
+2. **Otomatis selamanya:** deploy Cloud Function `onAuthUserDeleted` (lihat bagian di bawah) — setelah itu, setiap kali akun dihapus di Firebase Console, Firestore-nya (termasuk halaman Daftar Akun) otomatis ikut bersih tanpa perlu klik apapun.
+
+## ☁️ Cloud Functions: Sinkronisasi Firebase Auth ↔ Firestore (Opsional)
 
 Tombol "Hapus" di menu Daftar Akun **selalu** menghapus data (customer,
 invoice, settings) dan mengunci akun agar tidak bisa login — ini jalan
 tanpa perlu setup tambahan apapun.
 
-Tapi akunnya **masih tercatat** di Firebase Authentication (Anda masih bisa
-melihatnya di Firebase Console → Authentication → Users), karena aplikasi
-client (React) memang **tidak diizinkan Firebase** menghapus akun login
-milik user lain — ini batasan keamanan Firebase sendiri, bukan Anthropic.
-Satu-satunya cara menghapusnya secara total dan otomatis adalah lewat
-**Firebase Admin SDK** yang berjalan di server tepercaya (Cloud Function),
-bukan di browser pengguna.
+Tapi ada 2 hal yang butuh Cloud Function kalau mau full-otomatis (folder
+`functions/` di repo ini sudah menyiapkan keduanya):
 
-Repo ini sudah menyertakan Cloud Function siap pakai di folder `functions/`
-untuk keperluan itu. Sifatnya **opsional** — kalau tidak di-deploy,
-aplikasi tetap berjalan normal (cuma nanti muncul info bahwa akunnya masih
-ada di Firebase Auth, dan Anda bisa hapus manual lewat Console).
+| Fungsi | Kapan jalan | Yang dilakukan |
+|---|---|---|
+| `deleteAuthUser` | Dipanggil otomatis saat klik "Hapus" di panel | Menghapus akun dari Firebase Authentication |
+| `onAuthUserDeleted` | Otomatis setiap kali akun Auth dihapus (lewat fungsi di atas **atau** manual lewat Firebase Console) | Menghapus data akun tsb di Firestore (`users/{uid}/...` + `accounts/{uid}`), supaya halaman Daftar Akun otomatis ikut bersih |
+
+Keduanya **opsional** — kalau tidak di-deploy, aplikasi tetap berjalan
+normal, cuma perlu klik "🧹 Bersihkan dari Daftar" manual setelah hapus
+akun lewat Firebase Console.
 
 ### Cara deploy
 

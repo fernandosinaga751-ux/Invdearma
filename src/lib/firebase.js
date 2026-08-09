@@ -165,6 +165,19 @@ export async function approveAccount(uid) {
 export async function setAccountStatus(uid, status) {
   await updateDoc(doc(db, 'accounts', uid), { status });
 }
+
+// Menghapus entri direktori (accounts/{uid}) SEPENUHNYA, tanpa menyentuh
+// data users/{uid}/... maupun akun Firebase Auth.
+//
+// ⚠️ HANYA aman dipakai kalau akun Firebase Auth-nya SUDAH BENAR-BENAR
+// TIDAK ADA LAGI (misal sudah dihapus manual lewat Firebase Console →
+// Authentication). Kalau akun Auth-nya masih ada dan entri direktorinya
+// dihapus, sistem akan menganggap "tidak ada catatan = akun aktif" saat
+// orang itu login lagi — jadi JANGAN dipakai untuk akun yang masih aktif.
+export async function removeAccountEntry(uid) {
+  await deleteDoc(doc(db, 'accounts', uid));
+}
+
 export async function deleteAccountCompletely(uid) {
   // Menghapus seluruh data Firestore milik akun ini (settings, customers,
   // invoices) dan mengunci akun secara PERMANEN.
