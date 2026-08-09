@@ -38,8 +38,9 @@ export default function Login({ settings, onMasterLogin }) {
       onMasterLogin?.();
     } catch (e) {
       setErr(e.message === 'WRONG_PASSWORD' ? '❌ Password salah!' : '❌ ' + e.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handle = async () => {
@@ -67,8 +68,9 @@ export default function Login({ settings, onMasterLogin }) {
       } else {
         setErr('❌ ' + friendlyError(e.code));
       }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

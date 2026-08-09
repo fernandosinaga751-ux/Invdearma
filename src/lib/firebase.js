@@ -21,8 +21,16 @@ const cfg = {
 };
 
 const app = getApps().length ? getApps()[0] : initializeApp(cfg);
-// Matikan offline cache → paksa baca langsung dari server Firebase
-const db = initializeFirestore(app, { localCache: memoryLocalCache() });
+// Matikan offline cache → paksa baca langsung dari server Firebase.
+// experimentalAutoDetectLongPolling: mengatasi error WebChannel 400 /
+// koneksi macet yang sering terjadi di jaringan tertentu (proxy, firewall,
+// hosting) dengan otomatis beralih ke mode long-polling saat streaming
+// biasa gagal/tidak stabil.
+const db = initializeFirestore(app, {
+  localCache: memoryLocalCache(),
+  experimentalAutoDetectLongPolling: true,
+  useFetchStreams: false,
+});
 const auth = getAuth(app);
 export { db, auth };
 
@@ -51,17 +59,31 @@ function sCol(...parts) { return collection(db, ...basePath(), ...parts); }
 // ─── LOGIN UTAMA (database lama, password lama) ────────────────
 const MASTER_FLAG = 'dearma_master_session';
 
+function withTimeout(promise, ms = 10000) {
+  const t = new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), ms));
+  return Promise.race([promise, t]);
+}
+
 export async function getMasterPassword() {
   try {
-    const s = await getDoc(doc(db, 'config', 'auth'));
+    const s = await withTimeout(getDoc(doc(db, 'config', 'auth')));
     return s.exists() ? s.data().password : 'admin1234';
   } catch { return 'admin1234'; }
 }
 export async function saveMasterPassword(pw) {
-  await setDoc(doc(db, 'config', 'auth'), { password: pw });
+  await withTimeout(setDoc(doc(db, 'config', 'auth'), { password: pw }));
 }
 export async function loginMaster(pw) {
-  const real = await getMasterPassword();
+  let real;
+  try {
+    const s = await withTimeout(getDoc(doc(db, 'config', 'auth')));
+    real = s.exists() ? s.data().password : 'admin1234';
+  } catch (e) {
+    if (e.message === 'TIMEOUT') {
+      throw new Error('Koneksi ke Firebase macet/timeout. Periksa koneksi internet atau coba refresh halaman.');
+    }
+    throw new Error('Gagal menghubungi Firebase: ' + e.message);
+  }
   if (pw !== real) throw new Error('WRONG_PASSWORD');
   session = { kind: 'master' };
   try { localStorage.setItem(MASTER_FLAG, '1'); } catch {}
