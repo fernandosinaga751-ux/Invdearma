@@ -5,8 +5,9 @@ import { doPrintBlankReceipt } from '../lib/print.js';
 
 export default function BlankReceipt({ settings, setPage }) {
   const [copies, setCopies] = useState(1);
+  const [withLunas, setWithLunas] = useState(false);
 
-  const print = variant => doPrintBlankReceipt(variant, settings, Number(copies) || 1);
+  const print = variant => doPrintBlankReceipt(variant, settings, Number(copies) || 1, withLunas);
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-3xl">
@@ -36,6 +37,18 @@ export default function BlankReceipt({ settings, setPage }) {
             kwitansi. Ukuran A4 potrait, 1 halaman dibagi 2 (atas-bawah) — jadi 2 kwitansi tercetak dalam 1 lembar A4, lengkap dengan garis potong.
           </span>
         </div>
+
+        <label className="flex items-center gap-2.5 mt-4 pt-4 border-t border-slate-100 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            checked={withLunas}
+            onChange={e => setWithLunas(e.target.checked)}
+            className="w-4 h-4 rounded border-slate-300 accent-[#059669]"
+          />
+          <span className="text-sm text-slate-600">
+            Tambahkan watermark <span className="font-bold text-emerald-600">LUNAS</span> di latar belakang kwitansi
+          </span>
+        </label>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

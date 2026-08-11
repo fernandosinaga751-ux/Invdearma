@@ -74,7 +74,7 @@ function buildInvoiceHTML(invoice, settings) {
         <div class="co-name">${co}</div>
         <div class="co-sub">
           ${settings.address ? settings.address + '<br>' : ''}
-          ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+          ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : '', settings.website ? '🌐 ' + settings.website : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
         </div>
       </div>
       <div class="badge">
@@ -246,7 +246,7 @@ function buildKwitansiHTML(invoice, settings) {
         <div class="co-name">${co}</div>
         <div class="co-sub">
           ${settings.address ? settings.address + '<br>' : ''}
-          ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+          ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : '', settings.website ? '🌐 ' + settings.website : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
         </div>
       </div>
       <div class="kw-title">
@@ -343,11 +343,13 @@ function buildKwitansiHTML(invoice, settings) {
 // KWITANSI KOSONG — Bertema (kop perusahaan otomatis)
 // A4 portrait, 1 lembar A4 dibagi 2 (atas-bawah) = 2 kwitansi/halaman
 // ════════════════════════════════════════════════════════════════
-function buildBlankReceiptThemedHTML(settings, copies) {
+function buildBlankReceiptThemedHTML(settings, copies, withLunas = false) {
   const co = settings.companyName || 'Dearma Rental Mobil Medan';
+  const lunasWm = withLunas ? `<div class="wm-lunas">LUNAS</div>` : '';
 
   const oneSlot = () => `
     <div class="slot">
+      ${lunasWm}
       <div class="content">
         <div class="header">
           <div class="logo-box">
@@ -357,7 +359,7 @@ function buildBlankReceiptThemedHTML(settings, copies) {
             <div class="co-name">${co}</div>
             <div class="co-sub">
               ${settings.address ? settings.address + '<br>' : ''}
-              ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+              ${[settings.phone ? '📞 ' + settings.phone : '', settings.email ? '✉ ' + settings.email : '', settings.website ? '🌐 ' + settings.website : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
             </div>
           </div>
           <div class="kw-title">
@@ -445,6 +447,16 @@ function buildBlankReceiptThemedHTML(settings, copies) {
   .sheet{width:210mm;height:297mm;margin:0 auto;position:relative;display:flex;flex-direction:column;page-break-after:always;}
   .sheet:last-child{page-break-after:auto;}
   .slot{width:100%;height:148.5mm;padding:9mm 14mm;position:relative;overflow:hidden;box-sizing:border-box;}
+  .wm-lunas{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%) rotate(-30deg);
+    font-size:80px;font-weight:900;
+    color:rgba(5,150,105,0.14);
+    pointer-events:none;
+    font-family:'Playfair Display',serif;
+    white-space:nowrap;letter-spacing:8px;
+    z-index:0;
+  }
   .cut-line{width:100%;border-top:1px dashed #bbb;position:relative;flex:0 0 0;}
   .cut-line::after{content:'✂ potong di sini';position:absolute;left:50%;top:-7px;transform:translateX(-50%);background:#fff;padding:0 8px;font-size:8px;color:#999;letter-spacing:.5px;}
   .content{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;}
@@ -496,9 +508,13 @@ function buildBlankReceiptThemedHTML(settings, copies) {
 // KWITANSI KOSONG — Polos (siap tulis tangan, tanpa kop)
 // A4 portrait, 1 lembar A4 dibagi 2 (atas-bawah) = 2 kwitansi/halaman
 // ════════════════════════════════════════════════════════════════
-function buildBlankReceiptPlainHTML(copies) {
+function buildBlankReceiptPlainHTML(copies, withLunas = false) {
+  const lunasWm = withLunas ? `<div class="wm-lunas">LUNAS</div>` : '';
+
   const oneSlot = () => `
     <div class="slot">
+      ${lunasWm}
+      <div class="content-plain">
       <div class="row1">
         <div class="title">KWITANSI</div>
         <div class="no-box">No. <span class="line short"></span></div>
@@ -533,6 +549,7 @@ function buildBlankReceiptPlainHTML(copies) {
           <span class="line short"></span>
         </div>
       </div>
+      </div>
     </div>`;
 
   const slots = Array.from({ length: copies }, oneSlot);
@@ -557,6 +574,16 @@ function buildBlankReceiptPlainHTML(copies) {
   .sheet{width:210mm;height:297mm;margin:0 auto;display:flex;flex-direction:column;page-break-after:always;}
   .sheet:last-child{page-break-after:auto;}
   .slot{width:100%;height:148.5mm;padding:10mm 16mm;position:relative;border:1.5px solid #333;display:flex;flex-direction:column;box-sizing:border-box;}
+  .wm-lunas{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%) rotate(-30deg);
+    font-size:70px;font-weight:900;
+    color:rgba(0,0,0,0.10);
+    pointer-events:none;
+    letter-spacing:8px;
+    z-index:0;
+  }
+  .content-plain{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;}
   .cut-line{width:100%;border-top:1px dashed #bbb;position:relative;}
   .cut-line::after{content:'✂ potong di sini';position:absolute;left:50%;top:-7px;transform:translateX(-50%);background:#fff;padding:0 8px;font-size:8px;color:#999;letter-spacing:.5px;}
   .row1{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:18px;}
@@ -936,10 +963,10 @@ export function doPrint(invoice, type, settings) {
   w.document.close();
 }
 
-export function doPrintBlankReceipt(variant, settings, copies = 1) {
+export function doPrintBlankReceipt(variant, settings, copies = 1, withLunas = false) {
   const html = variant === 'plain'
-    ? buildBlankReceiptPlainHTML(copies)
-    : buildBlankReceiptThemedHTML(settings, copies);
+    ? buildBlankReceiptPlainHTML(copies, withLunas)
+    : buildBlankReceiptThemedHTML(settings, copies, withLunas);
   const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
   if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
   w.document.write(html);

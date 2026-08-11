@@ -34,6 +34,7 @@ export const DEF_SETTINGS = {
   ownerName: '',
   phone: '',
   email: '',
+  website: '',
   address: 'Medan, Sumatera Utara',
   bankAccount: '',
   bankName: '',

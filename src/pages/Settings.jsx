@@ -90,6 +90,7 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
             <Input label="No. Telepon / HP" value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="08xxxxxxxxxx" />
             <Input label="Email"            value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@contoh.com" />
           </div>
+          <Input label="Alamat Website" value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} placeholder="www.contoh.com" />
           <Input label="Alamat Lengkap" value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Jl. Contoh No. 1, Medan" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Input label="Nama Bank" value={form.bankName || ''} onChange={e => setForm({ ...form, bankName: e.target.value })} placeholder="BCA / BNI / BRI / Mandiri..." />
