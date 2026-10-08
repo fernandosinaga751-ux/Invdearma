@@ -168,6 +168,10 @@ function buildKwitansiHTML(invoice, settings) {
   const paidDate = invoice.paidDate || invoice.date;
   const nominal = invoice.panjar > 0 ? (invoice.sisa || invoice.total) : invoice.total;
   const terbilangStr = terbilang(nominal);
+  // Estimasi jumlah baris item (deskripsi panjang = >1 baris). Banyak baris → kertas A4 portrait
+  // yang tinggi halamannya mengikuti isi; sedikit baris → A5 landscape seperti biasa.
+  const itemLines = (invoice.items || []).reduce((n, it) => n + Math.max(1, Math.ceil(String(it.description || '').length / 55)), 0);
+  const big = itemLines > 3;
 
   return `<!DOCTYPE html>
 <html lang="id"><head>
@@ -176,9 +180,10 @@ function buildKwitansiHTML(invoice, settings) {
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  html,body{width:210mm;height:148mm;overflow:hidden;}
+  html,body{width:210mm;}
+  .kw-row,.footer{break-inside:avoid;page-break-inside:avoid;}
   body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
-  .page{width:210mm;height:148mm;margin:0 auto;padding:10mm 14mm;position:relative;overflow:hidden;}
+  .page{width:210mm;${big ? '' : 'min-height:148mm;'}margin:0 auto;padding:10mm 14mm;position:relative;}
   /* Watermark LUNAS */
   .wm-lunas{
     position:absolute;top:50%;left:50%;
@@ -231,8 +236,8 @@ function buildKwitansiHTML(invoice, settings) {
   .tanggal-box{font-size:11px;color:#555;margin-bottom:6px;}
   @media print{
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    @page{size:A5 landscape;margin:0;}
-    .page{margin:0;width:100%;height:148mm;overflow:hidden;}
+    @page{size:${big ? 'A4 portrait' : 'A5 landscape'};margin:0;}
+    .page{margin:0;width:100%;${big ? '' : 'min-height:148mm;'}}
   }
 </style></head>
 <body><div class="page">
