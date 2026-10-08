@@ -2,7 +2,7 @@
 import { Card, Btn } from '../components/UI.jsx';
 import { fmt, formatDateID, MONTHS_ID, todayStr } from '../lib/utils.js';
 
-export default function Dashboard({ invoices, customers, setPage, setViewingId }) {
+export default function Dashboard({ invoices, customers, setPage, setViewingId, pendingCount = 0 }) {
   const now = new Date();
   const thisM = now.getMonth(), thisY = now.getFullYear();
   const mInvs = invoices.filter(i => {
@@ -33,6 +33,17 @@ export default function Dashboard({ invoices, customers, setPage, setViewingId }
         </div>
         <Btn onClick={() => setPage('new-invoice')}>+ Buat Invoice</Btn>
       </div>
+
+      {pendingCount > 0 && (
+        <button onClick={() => setPage('invoices')}
+          className="w-full text-left bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-center justify-between hover:bg-amber-100 transition">
+          <div>
+            <div className="font-black text-amber-700">✏️ {pendingCount} usulan diskon/pajak dari customer</div>
+            <div className="text-xs text-amber-600 mt-0.5">Buka Invoice & Kwitansi untuk meninjau dan menerapkan.</div>
+          </div>
+          <span className="text-amber-700 font-black">→</span>
+        </button>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
