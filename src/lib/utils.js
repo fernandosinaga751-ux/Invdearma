@@ -91,3 +91,13 @@ export const fileNameSafe = name =>
 
 // Label pajak: "PPN 11%" bila persen, "Pajak" bila nominal manual
 export const taxLabel = inv => (inv.ppn > 0 ? `PPN ${inv.ppn}%` : 'Pajak');
+
+// Hitung total invoice dari subtotal + diskon (Rp) + pajak (Rp) + panjar
+export function calcTotals({ subtotal = 0, diskon = 0, pajak = 0, panjar = 0 }) {
+  const sub = Math.max(0, Number(subtotal) || 0);
+  const diskonAmt = Math.min(Math.max(0, Math.round(Number(diskon) || 0)), sub);
+  const pajakAmt = Math.max(0, Math.round(Number(pajak) || 0));
+  const total = sub - diskonAmt + pajakAmt;
+  const panjarAmt = Math.min(Math.max(0, Number(panjar) || 0), total);
+  return { subtotal: sub, diskonAmt, pajak: pajakAmt, total, panjarAmt, sisa: total - panjarAmt };
+}
