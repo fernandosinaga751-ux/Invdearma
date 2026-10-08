@@ -265,6 +265,17 @@ dearma-invoice/
 
 ---
 
+
+## 🔗 Link Invoice untuk Customer (Usulan Diskon & Pajak)
+
+1. Buka detail invoice → klik **Buat Link** → **Salin Link** → kirim ke customer (format `https://domain-anda/v/<token>`).
+2. Customer **hanya bisa melihat** invoice dan mengubah **Diskon (Rp)** dan **Pajak (Rp)**. Hasil sementara tampil langsung; klik **Kirim Usulan**.
+3. Di aplikasi, usulan muncul di Dashboard, daftar invoice (badge ✏️ USULAN), dan detail invoice. Klik **Terapkan** (atau **Tolak**), lalu **Cetak Invoice / Cetak Kwitansi**.
+
+**WAJIB:** publish ulang Firestore Rules dari file `firestore.rules` (ganti email admin). Tanpa itu link tidak bisa dibuka/dikirim.
+Begitu usulan **diterapkan**, link yang sebelumnya dikirim ke customer **otomatis mati** (customer melihat "Link sudah tidak berlaku"). Untuk mengirim lagi, klik **Buat Link Baru**.
+Catatan: bila diterapkan, pajak tercatat sebagai nominal manual (bukan persen). Logo tidak ditampilkan di halaman customer.
+
 ## 🗃️ Struktur Database Firestore (Admin + Multi-akun)
 
 ```
