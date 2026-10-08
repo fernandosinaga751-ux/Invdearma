@@ -1,9 +1,9 @@
 // src/pages/Invoices.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Input, Btn, Badge, Icons } from '../components/UI.jsx';
-import { fmt, formatDateID, todayStr, taxLabel } from '../lib/utils.js';
+import { fmt, formatDateID, todayStr, taxLabel, calcTotals } from '../lib/utils.js';
 import { doPrint } from '../lib/print.js';
-import { deleteInvoice, updateInvoice } from '../lib/firebase.js';
+import { deleteInvoice, updateInvoice, ensureShare, syncShare, deleteShare, setProposalStatus, closeShare, shareUrl } from '../lib/firebase.js';
 
 // ─── Modal "Sudah Bayar" → Konfirmasi + Cetak Kwitansi ───────────────────────
 function BayarModal({ invoice, settings, onConfirm, onClose }) {
@@ -89,8 +89,82 @@ function BayarModal({ invoice, settings, onConfirm, onClose }) {
   );
 }
 
+// ─── Panel Link Customer + Usulan Perubahan ──────────────────────────────────
+function SharePanel({ invoice, share, settings, onShared, onApply, onReject }) {
+  const closed = !!invoice.shareClosed;
+  const [busy, setBusy]   = useState(false);
+  const [copied, setCopied] = useState(false);
+  const token = invoice.shareToken || share?.token;
+  const link  = token ? shareUrl(token) : '';
+  const pr    = share?.proposal;
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(link); }
+    catch { window.prompt('Salin link ini:', link); }
+    setCopied(true); setTimeout(() => setCopied(false), 1800);
+  };
+  const create = async () => {
+    setBusy(true);
+    try { const t = await ensureShare(invoice, settings, { forceNew: closed }); onShared(t); }
+    catch (e) { alert('Gagal membuat link: ' + e.message + '\n\nPastikan Firestore Rules sudah diperbarui (lihat README).'); }
+    setBusy(false);
+  };
+
+  const sim = pr ? calcTotals({ subtotal: invoice.subtotal, diskon: pr.diskon, pajak: pr.pajak, panjar: invoice.panjar }) : null;
+  const curPajak = invoice.ppnAmount || 0;
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="font-bold text-[#0f2544] text-sm">🔗 Link untuk Customer</div>
+        <div className="flex-1" />
+        {closed || !token
+          ? <Btn variant="outline" onClick={create} disabled={busy} className="text-xs px-3 py-1.5">{busy ? 'Membuat...' : (closed ? 'Buat Link Baru' : 'Buat Link')}</Btn>
+          : <Btn variant="outline" onClick={copy} className="text-xs px-3 py-1.5">{copied ? '✅ Tersalin' : '📋 Salin Link'}</Btn>}
+      </div>
+      {closed
+        ? <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">🔒 Link sebelumnya sudah dinonaktifkan karena usulan diterapkan. Customer tidak bisa membukanya lagi.</div>
+        : token
+        ? <div className="font-mono text-[11px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2 break-all">{link}</div>
+        : <p className="text-xs text-slate-400">Customer hanya bisa melihat invoice dan mengusulkan perubahan diskon & pajak. Perubahan tidak berlaku sampai Anda terapkan.</p>}
+
+      {pr && (
+        <div className={`rounded-2xl border-2 p-4 space-y-3 ${pr.status === 'pending' ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-black text-sm text-[#0f2544]">✏️ Usulan Customer</div>
+            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${pr.status === 'pending' ? 'bg-amber-200 text-amber-800' : pr.status === 'applied' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+              {pr.status === 'pending' ? 'MENUNGGU' : pr.status === 'applied' ? 'SUDAH DITERAPKAN' : 'DITOLAK'}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400">Dikirim {pr.submittedAt ? new Date(pr.submittedAt).toLocaleString('id-ID') : '-'}</div>
+          <table className="w-full text-sm">
+            <thead><tr className="text-xs text-slate-400 text-left"><th></th><th className="text-right">Sekarang</th><th className="text-right">Usulan</th></tr></thead>
+            <tbody>
+              <tr><td className="py-1">🏷️ Diskon</td><td className="text-right">Rp {fmt(invoice.diskon || 0)}</td><td className="text-right font-bold">Rp {fmt(sim.diskonAmt)}</td></tr>
+              <tr><td className="py-1">🧾 Pajak</td><td className="text-right">Rp {fmt(curPajak)}</td><td className="text-right font-bold">Rp {fmt(sim.pajak)}</td></tr>
+              <tr className="border-t border-slate-200"><td className="py-1 font-bold">Total</td><td className="text-right">Rp {fmt(invoice.total)}</td><td className="text-right font-black text-emerald-600">Rp {fmt(sim.total)}</td></tr>
+            </tbody>
+          </table>
+          {pr.status === 'pending' && (
+            <div className="flex gap-2">
+              <Btn variant="green" onClick={() => onApply(invoice, pr)} className="flex-1 justify-center">✅ Terapkan</Btn>
+              <Btn variant="ghost" onClick={() => onReject(invoice)}>Tolak</Btn>
+            </div>
+          )}
+          {pr.status === 'applied' && (
+            <div className="flex flex-wrap gap-2">
+              <Btn variant="primary" onClick={() => doPrint(invoice, 'invoice', settings)}>{Icons.print} Cetak Invoice</Btn>
+              <Btn variant="gold" onClick={() => doPrint(invoice, 'kwitansi', settings)}>{Icons.print} Cetak Kwitansi</Btn>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── Detail / View Invoice ────────────────────────────────────────────────────
-function ViewInvoice({ invoice, settings, onBack, onEdit, onDelete, onBayar }) {
+function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBayar, onShared, onApply, onReject }) {
   if (!invoice) return (
     <div className="p-6">
       <p className="text-slate-400 mb-4">Invoice tidak ditemukan.</p>
@@ -127,6 +201,8 @@ function ViewInvoice({ invoice, settings, onBack, onEdit, onDelete, onBayar }) {
         )}
         <Btn variant="danger" onClick={() => onDelete(invoice.id)}>{Icons.trash}</Btn>
       </div>
+
+      <SharePanel invoice={invoice} share={share} settings={settings} onShared={onShared} onApply={onApply} onReject={onReject} />
 
       {/* Invoice card */}
       <Card>
@@ -253,12 +329,39 @@ function ViewInvoice({ invoice, settings, onBack, onEdit, onDelete, onBayar }) {
 }
 
 // ─── Invoices List ────────────────────────────────────────────────────────────
-export default function Invoices({ invoices, setInvoices, settings, setPage, viewingId, setViewingId, setEditingInvoice }) {
+export default function Invoices({ invoices, setInvoices, settings, setPage, viewingId, setViewingId, setEditingInvoice, shares = {}, refreshShares = () => {} }) {
   const [search, setSearch]     = useState('');
   const [bayarInv, setBayarInv] = useState(null); // invoice yg sedang dikonfirmasi bayar
 
+  // Cek usulan customer terbaru setiap halaman ini dibuka
+  useEffect(() => { refreshShares(); }, []);
+
+  const patchInvoice = (id, patch) => setInvoices(invoices.map(i => i.id === id ? { ...i, ...patch } : i));
+
+  const handleShared = (id, token) => { patchInvoice(id, { shareToken: token, shareClosed: false }); refreshShares(); };
+
+  // Terapkan usulan customer → update invoice, sinkron link, tandai 'applied'
+  const handleApply = async (inv, pr) => {
+    const t = calcTotals({ subtotal: inv.subtotal, diskon: pr.diskon, pajak: pr.pajak, panjar: inv.panjar });
+    const patch = { diskon: t.diskonAmt, ppn: 0, ppnAmount: t.pajak, ppnManual: true, total: t.total, panjar: t.panjarAmt, sisa: t.sisa, shareClosed: true };
+    try {
+      await updateInvoice(inv.id, patch);
+      const updated = { ...inv, ...patch };
+      patchInvoice(inv.id, patch);
+      await closeShare(updated, pr); // link lama langsung mati
+      await refreshShares();
+    } catch (e) { alert('Gagal menerapkan: ' + e.message); }
+  };
+
+  const handleReject = async inv => {
+    if (!confirm('Tolak usulan customer ini?')) return;
+    try { await setProposalStatus(inv.shareToken, 'rejected'); await refreshShares(); }
+    catch (e) { alert('Gagal: ' + e.message); }
+  };
+
   const handleDelete = async id => {
     if (!confirm('Hapus invoice ini? Tidak dapat dibatalkan.')) return;
+    await deleteShare(invoices.find(i => i.id === id)?.shareToken);
     await deleteInvoice(id);
     setInvoices(invoices.filter(i => i.id !== id));
     setViewingId(null);
@@ -272,6 +375,7 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
     try {
       await updateInvoice(inv.id, { paidDate });
       setInvoices(invoices.map(i => i.id === inv.id ? inv : i));
+      syncShare(inv, settings);
       setBayarInv(null);
       // Langsung cetak kwitansi
       doPrint(inv, 'kwitansi', settings);
@@ -288,7 +392,8 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
     return (
       <>
         <ViewInvoice
-          invoice={inv} settings={settings}
+          invoice={inv} settings={settings} share={inv ? shares[inv.id] : null}
+          onShared={t => handleShared(inv.id, t)} onApply={handleApply} onReject={handleReject}
           onBack={() => setViewingId(null)}
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -363,7 +468,12 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
                     return (
                       <tr key={inv.id} className={`border-b border-slate-50 hover:bg-slate-50/80 transition ${isPaid ? '' : ''}`}>
                         <td className="px-5 py-3 font-mono text-xs font-black text-[#0f2544]">{inv.invoiceNo}</td>
-                        <td className="px-5 py-3 font-semibold">{inv.customerName}</td>
+                        <td className="px-5 py-3 font-semibold">
+                          {inv.customerName}
+                          {shares[inv.id]?.proposal?.status === 'pending' && (
+                            <button onClick={() => setViewingId(inv.id)} className="ml-2 align-middle text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 text-amber-800">✏️ USULAN</button>
+                          )}
+                        </td>
                         <td className="px-5 py-3 text-slate-500 text-xs">{formatDateID(inv.date)}</td>
                         <td className="px-5 py-3 text-xs">
                           {inv.dueDate
