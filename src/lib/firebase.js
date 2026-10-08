@@ -9,6 +9,7 @@ import {
   initializeFirestore, memoryLocalCache,
   doc, getDoc, setDoc, updateDoc,
   collection, getDocs, addDoc, deleteDoc,
+  query, where,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -272,4 +273,124 @@ export async function updateInvoice(id, data) {
 }
 export async function deleteInvoice(id) {
   await deleteDoc(sDoc('invoices', id));
+}
+
+// ─── SHARE LINK (customer melihat invoice & mengusulkan diskon/pajak) ───
+// Dokumen publik di koleksi top-level `shares/{token}`. Token acak panjang
+// = "kunci" link. Isinya hanya salinan (snapshot) data yang boleh dilihat
+// customer — data asli invoice tetap privat.
+export const SHARE_COL = 'shares';
+
+export function newShareToken() {
+  const a = new Uint8Array(18);
+  crypto.getRandomValues(a);
+  return Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); // 36 hex
+}
+
+export function shareUrl(token) {
+  return `${window.location.origin}/v/${token}`;
+}
+
+function buildShareSnapshot(invoice, settings = {}) {
+  return {
+    ownerUid: auth.currentUser.uid,
+    invoiceId: invoice.id,
+    paid: !!invoice.paidDate,
+    updatedAt: new Date().toISOString(),
+    invoice: {
+      invoiceNo: invoice.invoiceNo || '',
+      customerName: invoice.customerName || '',
+      date: invoice.date || '',
+      dueDate: invoice.dueDate || '',
+      items: (invoice.items || []).map(i => ({
+        description: i.description || '', qty: Number(i.qty) || 0, price: Number(i.price) || 0,
+      })),
+      subtotal: Number(invoice.subtotal) || 0,
+      diskon: Number(invoice.diskon) || 0,
+      ppn: Number(invoice.ppn) || 0,
+      ppnAmount: Number(invoice.ppnAmount) || 0,
+      total: Number(invoice.total) || 0,
+      panjar: Number(invoice.panjar) || 0,
+      sisa: Number(invoice.sisa) || 0,
+      notes: invoice.notes || '',
+    },
+    company: {
+      companyName: settings.companyName || '',
+      address: settings.address || '',
+      phone: settings.phone || '',
+      ownerName: settings.ownerName || '',
+      bankName: settings.bankName || '',
+      bankAccount: settings.bankAccount || '',
+    },
+  };
+}
+
+// Buat (atau perbarui) dokumen share untuk sebuah invoice. Mengembalikan token.
+export async function ensureShare(invoice, settings, { forceNew = false } = {}) {
+  const fresh = forceNew || !invoice.shareToken;
+  if (forceNew && invoice.shareToken) await deleteShare(invoice.shareToken); // buang link lama
+  const token = fresh ? newShareToken() : invoice.shareToken;
+  await setDoc(doc(db, SHARE_COL, token), buildShareSnapshot(invoice, settings), { merge: true });
+  if (fresh) await updateInvoice(invoice.id, { shareToken: token, shareClosed: false });
+  return token;
+}
+
+// Tutup link: isi invoice DIHAPUS dari dokumen publik & customer tidak bisa
+// mengirim usulan lagi. Dipanggil otomatis saat usulan diterapkan.
+export async function closeShare(invoice, proposal) {
+  if (!invoice?.shareToken) return;
+  await setDoc(doc(db, SHARE_COL, invoice.shareToken), {
+    ownerUid: auth.currentUser.uid,
+    invoiceId: invoice.id,
+    paid: !!invoice.paidDate,
+    closed: true,
+    closedAt: new Date().toISOString(),
+    proposal: { ...proposal, status: 'applied', resolvedAt: new Date().toISOString() },
+  });
+}
+
+// Sinkronkan snapshot bila invoice sudah pernah dibagikan (diam-diam, tidak melempar error)
+export async function syncShare(invoice, settings) {
+  if (!invoice?.shareToken || invoice.shareClosed) return; // link sudah ditutup → jangan dihidupkan lagi
+  try { await ensureShare(invoice, settings); } catch (e) { console.warn('syncShare:', e); }
+}
+
+export async function deleteShare(token) {
+  if (!token) return;
+  try { await deleteDoc(doc(db, SHARE_COL, token)); } catch (e) { console.warn('deleteShare:', e); }
+}
+
+// Semua share milik user yang sedang login → { [invoiceId]: shareDoc }
+export async function getShares() {
+  try {
+    const q = query(collection(db, SHARE_COL), where('ownerUid', '==', auth.currentUser.uid));
+    const snap = await getDocs(q);
+    const map = {};
+    snap.docs.forEach(d => { const v = d.data(); if (v.invoiceId) map[v.invoiceId] = { token: d.id, ...v }; });
+    return map;
+  } catch (e) { console.warn('getShares:', e); return {}; }
+}
+
+export async function setProposalStatus(token, status) {
+  await updateDoc(doc(db, SHARE_COL, token), {
+    'proposal.status': status,
+    'proposal.resolvedAt': new Date().toISOString(),
+  });
+}
+
+// ── Sisi customer (tanpa login) ──
+export async function getPublicShare(token) {
+  const s = await getDoc(doc(db, SHARE_COL, token));
+  return s.exists() ? { token, ...s.data() } : null;
+}
+
+export async function submitProposal(token, { diskon, pajak }) {
+  await updateDoc(doc(db, SHARE_COL, token), {
+    proposal: {
+      diskon: Math.max(0, Math.round(Number(diskon) || 0)),
+      pajak:  Math.max(0, Math.round(Number(pajak)  || 0)),
+      status: 'pending',
+      submittedAt: new Date().toISOString(),
+    },
+  });
 }
