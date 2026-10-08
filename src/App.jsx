@@ -14,7 +14,7 @@ import BusinessCard from './pages/BusinessCard.jsx';
 import { DEF_SETTINGS } from './lib/utils.js';
 import {
   watchAuthState, bindAndVerifyAccount, logoutSession,
-  getSettings, getCustomers, getInvoices,
+  getSettings, getCustomers, getInvoices, getShares,
 } from './lib/firebase.js';
 
 const NAV_TITLES = {
@@ -37,6 +37,7 @@ export default function App() {
   const [dataLoading,    setDataLoading]   = useState(false);
   const [customers,      setCustomers]     = useState([]);
   const [invoices,       setInvoices]      = useState([]);
+  const [shares,         setShares]        = useState({}); // { invoiceId: shareDoc }
   const [settings,       setSettings]      = useState(DEF_SETTINGS);
   const [viewingId,      setViewingId]     = useState(null);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -77,13 +78,14 @@ export default function App() {
       setDataLoading(true);
       setLoadError('');
       try {
-        const [s, c, i] = await withTimeout(
-          Promise.all([getSettings(), getCustomers(), getInvoices()])
+        const [s, c, i, sh] = await withTimeout(
+          Promise.all([getSettings(), getCustomers(), getInvoices(), getShares()])
         );
         if (cancelled) return;
         setSettings(s ? { ...DEF_SETTINGS, ...s } : DEF_SETTINGS);
         setCustomers(c || []);
         setInvoices(i  || []);
+        setShares(sh || {});
       } catch(e) {
         if (cancelled) return;
         const msg = e.message === 'timeout'
@@ -96,6 +98,10 @@ export default function App() {
     return () => { cancelled = true; };
   }, [sessionKind, fbUser?.uid]);
 
+  const refreshShares = async () => setShares(await getShares());
+
+  const pendingCount = Object.values(shares).filter(x => x.proposal?.status === 'pending').length;
+
   const setPage = p => {
     if (p !== 'new-invoice') setEditingInvoice(null);
     if (p !== 'invoices')    setViewingId(null);
@@ -106,7 +112,7 @@ export default function App() {
     await logoutSession();
     setSessionKind(null);
     setFbUser(null);
-    setCustomers([]); setInvoices([]); setSettings(DEF_SETTINGS);
+    setCustomers([]); setInvoices([]); setShares({}); setSettings(DEF_SETTINGS);
     setPageState('dashboard'); setLoadError(''); setSidebarOpen(false);
   };
 
@@ -172,16 +178,17 @@ export default function App() {
   // ── App ───────────────────────────────────────────────────────
   const renderPage = () => {
     switch (page) {
-      case 'dashboard':   return <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} />;
+      case 'dashboard':   return <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} pendingCount={pendingCount} />;
       case 'customers':   return <Customers customers={customers} setCustomers={setCustomers} />;
       case 'invoices':    return <Invoices  invoices={invoices} setInvoices={setInvoices} settings={settings}
                                     setPage={setPage} viewingId={viewingId} setViewingId={setViewingId}
-                                    setEditingInvoice={setEditingInvoice} />;
+                                    setEditingInvoice={setEditingInvoice}
+                                    shares={shares} refreshShares={refreshShares} />;
       case 'new-invoice': return <NewInvoice invoices={invoices} customers={customers} setInvoices={setInvoices}
                                     setPage={setPage} setViewingId={setViewingId}
-                                    editingInvoice={editingInvoice} setEditingInvoice={setEditingInvoice} />;
+                                    editingInvoice={editingInvoice} setEditingInvoice={setEditingInvoice} settings={settings} />;
       case 'settings':    return <Settings settings={settings} setSettings={setSettings} sessionKind={sessionKind} fbUser={fbUser} />;
-      case 'accounts':    return sessionKind === 'master' ? <Accounts /> : <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} />;
+      case 'accounts':    return sessionKind === 'master' ? <Accounts /> : <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} pendingCount={pendingCount} />;
       case 'blank-receipt': return <BlankReceipt settings={settings} setPage={setPage} />;
       case 'business-card': return <BusinessCard settings={settings} setPage={setPage} />;
       default: return null;
