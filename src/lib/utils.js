@@ -84,3 +84,10 @@ export function terbilang(n) {
   const str = parts.join(' ') + ' rupiah';
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+// Nama file (judul dokumen cetak/PDF) = nama pemesan
+export const fileNameSafe = name =>
+  String(name || 'Pelanggan').replace(/[\\/:*?"<>|&]/g, ' ').replace(/\s+/g, ' ').trim() || 'Pelanggan';
+
+// Label pajak: "PPN 11%" bila persen, "Pajak" bila nominal manual
+export const taxLabel = inv => (inv.ppn > 0 ? `PPN ${inv.ppn}%` : 'Pajak');
