@@ -14,6 +14,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   const [showDrop, setShowDrop] = useState(false);
   const [items, setItems]     = useState(editingInvoice?.items || [{ id: uid(), description: '', qty: 1, price: 0 }]);
   const [ppnPct, setPpnPct]   = useState(editingInvoice?.ppn || 0);
+  const [pajakManual, setPajakManual] = useState(editingInvoice?.ppnManual ? String(editingInvoice.ppnAmount || '') : '');
   const [dueDate, setDueDate] = useState(editingInvoice?.dueDate || '');
   const [notes, setNotes]     = useState(editingInvoice?.notes || '');
   const [diskon, setDiskon]   = useState(editingInvoice?.diskon || 0);
@@ -26,7 +27,8 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   const subtotal       = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
   const diskonAmt      = Math.min(Number(diskon) || 0, subtotal);
   const subtotalAfter  = subtotal - diskonAmt;
-  const ppnAmt         = Math.round(subtotalAfter * ppnPct / 100);
+  const isManualTax    = pajakManual !== '';
+  const ppnAmt         = isManualTax ? Math.max(0, Math.round(Number(pajakManual) || 0)) : Math.round(subtotalAfter * ppnPct / 100);
   const total          = subtotalAfter + ppnAmt;
   const panjarAmt      = Math.min(Number(panjar) || 0, total);
   const sisa           = total - panjarAmt;
@@ -50,7 +52,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
         customerPhone: selCust.phone || '', customerAddress: selCust.address || '',
         date, dueDate,
         items: items.map(i => ({ ...i, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })),
-        subtotal, diskon: diskonAmt, ppn: ppnPct, ppnAmount: ppnAmt, total,
+        subtotal, diskon: diskonAmt, ppn: isManualTax ? 0 : ppnPct, ppnAmount: ppnAmt, ppnManual: isManualTax, total,
         panjar: panjarAmt, sisa,
         notes,
       };
@@ -139,13 +141,25 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
                 {[0, 2, 5, 10, 11, 12].map(p => (
                   <button
                     key={p}
-                    onClick={() => setPpnPct(p)}
+                    onClick={() => { setPpnPct(p); setPajakManual(''); }}
                     className={`px-3 py-1.5 rounded-xl text-sm font-bold border-2 transition
-                      ${ppnPct === p ? 'bg-[#0f2544] text-white border-[#0f2544]' : 'border-slate-200 text-slate-600 hover:border-[#0f2544]'}`}
+                      ${!isManualTax && ppnPct === p ? 'bg-[#0f2544] text-white border-[#0f2544]' : 'border-slate-200 text-slate-600 hover:border-[#0f2544]'}`}
                   >
                     {p === 0 ? 'Tanpa PPN' : `${p}%`}
                   </button>
                 ))}
+              </div>
+              <div className="mt-3">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  🧾 Nilai Pajak (Rp) — isi manual
+                </label>
+                <input
+                  type="number" min="0"
+                  value={pajakManual}
+                  onChange={e => { setPajakManual(e.target.value); if (e.target.value !== '') setPpnPct(0); }}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]"
+                  placeholder="Kosongkan jika pakai persen di atas"
+                />
               </div>
             </div>
             <Input label="Catatan (Opsional)" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Catatan tambahan..." />
@@ -240,9 +254,9 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
                 <span className="font-bold">- Rp {fmt(diskonAmt)}</span>
               </div>
             )}
-            {ppnPct > 0 && (
+            {ppnAmt > 0 && (
               <div className="flex justify-between">
-                <span className="text-slate-500">PPN {ppnPct}%</span>
+                <span className="text-slate-500">{isManualTax ? 'Pajak' : `PPN ${ppnPct}%`}</span>
                 <span className="font-bold">Rp {fmt(ppnAmt)}</span>
               </div>
             )}
