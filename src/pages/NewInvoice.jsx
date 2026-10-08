@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { Card, Input, Btn, Icons } from '../components/UI.jsx';
 import { fmt, uid, todayStr, genInvNo } from '../lib/utils.js';
-import { addInvoice, updateInvoice } from '../lib/firebase.js';
+import { addInvoice, updateInvoice, syncShare } from '../lib/firebase.js';
 
-export default function NewInvoice({ invoices, customers, setInvoices, setPage, setViewingId, editingInvoice, setEditingInvoice }) {
+export default function NewInvoice({ invoices, customers, setInvoices, setPage, setViewingId, editingInvoice, setEditingInvoice, settings }) {
   const today = todayStr();
   const [date, setDate]       = useState(editingInvoice?.date || today);
   const [custQuery, setCustQuery] = useState(editingInvoice?.customerName || '');
@@ -59,6 +59,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
 
       if (editingInvoice) {
         await updateInvoice(editingInvoice.id, payload);
+        syncShare({ ...editingInvoice, ...payload }, settings); // perbarui link customer bila ada
         const updated = invoices.map(i => i.id === editingInvoice.id ? { ...i, ...payload } : i);
         setInvoices(updated);
         setEditingInvoice(null);
