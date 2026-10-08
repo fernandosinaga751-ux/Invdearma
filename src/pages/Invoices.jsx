@@ -1,7 +1,7 @@
 // src/pages/Invoices.jsx
 import { useState } from 'react';
 import { Card, Input, Btn, Badge, Icons } from '../components/UI.jsx';
-import { fmt, formatDateID, todayStr } from '../lib/utils.js';
+import { fmt, formatDateID, todayStr, taxLabel } from '../lib/utils.js';
 import { doPrint } from '../lib/print.js';
 import { deleteInvoice, updateInvoice } from '../lib/firebase.js';
 
@@ -203,8 +203,8 @@ function ViewInvoice({ invoice, settings, onBack, onEdit, onDelete, onBayar }) {
                 <span>🏷️ Diskon</span><span className="font-bold">- Rp {fmt(invoice.diskon)}</span>
               </div>
             )}
-            {invoice.ppn > 0 && (
-              <div className="flex justify-between"><span className="text-slate-500">PPN {invoice.ppn}%</span><span>Rp {fmt(invoice.ppnAmount)}</span></div>
+            {invoice.ppnAmount > 0 && (
+              <div className="flex justify-between"><span className="text-slate-500">{taxLabel(invoice)}</span><span>Rp {fmt(invoice.ppnAmount)}</span></div>
             )}
             <div className="flex justify-between pt-2 border-t-2 border-[#0f2544] text-base font-black text-[#0f2544]">
               <span>TOTAL</span><span>Rp {fmt(invoice.total)}</span>
