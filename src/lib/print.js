@@ -1,5 +1,5 @@
 // src/lib/print.js
-import { fmt, formatDateID, terbilang } from './utils.js';
+import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel } from './utils.js';
 
 // ════════════════════════════════════════════════════════════════
 // INVOICE (dengan Due Date)
@@ -9,7 +9,7 @@ function buildInvoiceHTML(invoice, settings) {
   return `<!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="UTF-8">
-<title>INVOICE - ${invoice.invoiceNo}</title>
+<title>${fileNameSafe(invoice.customerName)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -124,7 +124,7 @@ function buildInvoiceHTML(invoice, settings) {
     <div class="totals"><div class="totals-box">
       <div class="t-row"><span>Subtotal</span><span>Rp ${fmt(invoice.subtotal)}</span></div>
       ${invoice.diskon > 0 ? `<div class="t-row" style="color:#dc2626;"><span>🏷️ Diskon</span><span>- Rp ${fmt(invoice.diskon)}</span></div>` : ''}
-      ${invoice.ppn > 0 ? `<div class="t-row"><span>PPN ${invoice.ppn}%</span><span>Rp ${fmt(invoice.ppnAmount)}</span></div>` : ''}
+      ${invoice.ppnAmount > 0 ? `<div class="t-row"><span>${taxLabel(invoice)}</span><span>Rp ${fmt(invoice.ppnAmount)}</span></div>` : ''}
       <div class="t-row t-grand"><span>TOTAL</span><span>Rp ${fmt(invoice.total)}</span></div>
       ${invoice.panjar > 0 ? `
       <div class="t-row" style="color:#d97706;font-weight:700;"><span>💰 Panjar / DP</span><span>- Rp ${fmt(invoice.panjar)}</span></div>
@@ -172,7 +172,7 @@ function buildKwitansiHTML(invoice, settings) {
   return `<!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="UTF-8">
-<title>KWITANSI - ${invoice.invoiceNo}</title>
+<title>${fileNameSafe(invoice.customerName)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -286,11 +286,11 @@ function buildKwitansiHTML(invoice, settings) {
           </div>
         </div>
       </div>
-      ${invoice.ppn > 0 ? `
+      ${invoice.ppnAmount > 0 ? `
       <div class="kw-row">
         <span class="kw-label">Rincian</span>
         <span class="kw-sep">:</span>
-        <span class="kw-value" style="font-size:10.5px;color:#666;">Subtotal Rp ${fmt(invoice.subtotal)}${invoice.diskon > 0 ? ` − Diskon Rp ${fmt(invoice.diskon)}` : ''} + PPN ${invoice.ppn}% Rp ${fmt(invoice.ppnAmount)}</span>
+        <span class="kw-value" style="font-size:10.5px;color:#666;">Subtotal Rp ${fmt(invoice.subtotal)}${invoice.diskon > 0 ? ` − Diskon Rp ${fmt(invoice.diskon)}` : ''} + ${taxLabel(invoice)} Rp ${fmt(invoice.ppnAmount)}</span>
       </div>` : (invoice.diskon > 0 ? `
       <div class="kw-row">
         <span class="kw-label">Diskon</span>
