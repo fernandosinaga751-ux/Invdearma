@@ -90,14 +90,17 @@ export const fileNameSafe = name =>
   String(name || 'Pelanggan').replace(/[\\/:*?"<>|&]/g, ' ').replace(/\s+/g, ' ').trim() || 'Pelanggan';
 
 // Label pajak: "PPN 11%" bila persen, "Pajak" bila nominal manual
-export const taxLabel = inv => (inv.ppn > 0 ? `PPN ${inv.ppn}%` : 'Pajak');
+export const taxLabel = inv => (inv.ppn > 0 ? `${inv.taxMinus ? 'Pajak' : 'PPN'} ${inv.ppn}%` : 'Pajak');
+// Tanda pajak: invoice baru (taxMinus) = pengurang total; invoice lama = penambah
+export const taxSign = inv => (inv.taxMinus ? '- ' : '');
 
 // Hitung total invoice dari subtotal + diskon (Rp) + pajak (Rp) + panjar
-export function calcTotals({ subtotal = 0, diskon = 0, pajak = 0, panjar = 0 }) {
+export function calcTotals({ subtotal = 0, diskon = 0, pajak = 0, panjar = 0, minus = true }) {
   const sub = Math.max(0, Number(subtotal) || 0);
   const diskonAmt = Math.min(Math.max(0, Math.round(Number(diskon) || 0)), sub);
-  const pajakAmt = Math.max(0, Math.round(Number(pajak) || 0));
-  const total = sub - diskonAmt + pajakAmt;
+  let pajakAmt = Math.max(0, Math.round(Number(pajak) || 0));
+  if (minus) pajakAmt = Math.min(pajakAmt, sub - diskonAmt); // pajak mengurangi total, tidak boleh melebihi sisa setelah diskon
+  const total = minus ? sub - diskonAmt - pajakAmt : sub - diskonAmt + pajakAmt;
   const panjarAmt = Math.min(Math.max(0, Number(panjar) || 0), total);
   return { subtotal: sub, diskonAmt, pajak: pajakAmt, total, panjarAmt, sisa: total - panjarAmt };
 }

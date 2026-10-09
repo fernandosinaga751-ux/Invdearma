@@ -309,6 +309,7 @@ function buildShareSnapshot(invoice, settings = {}) {
       diskon: Number(invoice.diskon) || 0,
       ppn: Number(invoice.ppn) || 0,
       ppnAmount: Number(invoice.ppnAmount) || 0,
+      taxMinus: !!invoice.taxMinus,
       total: Number(invoice.total) || 0,
       panjar: Number(invoice.panjar) || 0,
       sisa: Number(invoice.sisa) || 0,

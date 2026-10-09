@@ -1,5 +1,5 @@
 // src/lib/print.js
-import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel } from './utils.js';
+import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel, taxSign } from './utils.js';
 
 // ════════════════════════════════════════════════════════════════
 // INVOICE (dengan Due Date)
@@ -124,7 +124,7 @@ function buildInvoiceHTML(invoice, settings) {
     <div class="totals"><div class="totals-box">
       <div class="t-row"><span>Subtotal</span><span>Rp ${fmt(invoice.subtotal)}</span></div>
       ${invoice.diskon > 0 ? `<div class="t-row" style="color:#dc2626;"><span>🏷️ Diskon</span><span>- Rp ${fmt(invoice.diskon)}</span></div>` : ''}
-      ${invoice.ppnAmount > 0 ? `<div class="t-row"><span>${taxLabel(invoice)}</span><span>Rp ${fmt(invoice.ppnAmount)}</span></div>` : ''}
+      ${invoice.ppnAmount > 0 ? `<div class="t-row"><span>${taxLabel(invoice)}</span><span>${taxSign(invoice)}Rp ${fmt(invoice.ppnAmount)}</span></div>` : ''}
       <div class="t-row t-grand"><span>TOTAL</span><span>Rp ${fmt(invoice.total)}</span></div>
       ${invoice.panjar > 0 ? `
       <div class="t-row" style="color:#d97706;font-weight:700;"><span>💰 Panjar / DP</span><span>- Rp ${fmt(invoice.panjar)}</span></div>
@@ -295,7 +295,7 @@ function buildKwitansiHTML(invoice, settings) {
       <div class="kw-row">
         <span class="kw-label">Rincian</span>
         <span class="kw-sep">:</span>
-        <span class="kw-value" style="font-size:10.5px;color:#666;">Subtotal Rp ${fmt(invoice.subtotal)}${invoice.diskon > 0 ? ` − Diskon Rp ${fmt(invoice.diskon)}` : ''} + ${taxLabel(invoice)} Rp ${fmt(invoice.ppnAmount)}</span>
+        <span class="kw-value" style="font-size:10.5px;color:#666;">Subtotal Rp ${fmt(invoice.subtotal)}${invoice.diskon > 0 ? ` − Diskon Rp ${fmt(invoice.diskon)}` : ''} ${invoice.taxMinus ? '−' : '+'} ${taxLabel(invoice)} Rp ${fmt(invoice.ppnAmount)}</span>
       </div>` : (invoice.diskon > 0 ? `
       <div class="kw-row">
         <span class="kw-label">Diskon</span>
