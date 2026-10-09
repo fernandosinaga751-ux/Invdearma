@@ -36,7 +36,7 @@ export default function PublicInvoice({ token }) {
 
   const inv = share.invoice, co = share.company || {};
   const paid = !!share.paid;
-  const cur = calcTotals({ subtotal: inv.subtotal, diskon: inv.diskon, pajak: inv.ppnAmount, panjar: inv.panjar });
+  const cur = calcTotals({ subtotal: inv.subtotal, diskon: inv.diskon, pajak: inv.ppnAmount, panjar: inv.panjar, minus: !!inv.taxMinus });
   const sim = calcTotals({ subtotal: inv.subtotal, diskon, pajak, panjar: inv.panjar });
   const diskonOver = (Number(diskon) || 0) > inv.subtotal;
   const changed = sim.diskonAmt !== cur.diskonAmt || sim.pajak !== cur.pajak;
@@ -125,7 +125,7 @@ export default function PublicInvoice({ token }) {
                   {diskonOver && <div className="text-xs text-red-500 mt-1">Melebihi subtotal (Rp {fmt(inv.subtotal)}).</div>}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">🧾 Pajak (Rp)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">🧾 Pajak (Rp) — mengurangi total</label>
                   <input type="number" min="0" inputMode="numeric" value={pajak} onChange={e => setPajak(e.target.value)} className={inputCls} />
                 </div>
                 <button onClick={send} disabled={sending || diskonOver || !changed}
@@ -150,7 +150,7 @@ export default function PublicInvoice({ token }) {
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{paid ? 'Rincian' : 'Hasil Sementara'}</div>
             <Row l="Subtotal" v={`Rp ${fmt(inv.subtotal)}`} />
             {(paid ? cur.diskonAmt : sim.diskonAmt) > 0 && <Row l="🏷️ Diskon" v={`- Rp ${fmt(paid ? cur.diskonAmt : sim.diskonAmt)}`} cls="text-red-500" />}
-            {(paid ? cur.pajak : sim.pajak) > 0 && <Row l="Pajak" v={`Rp ${fmt(paid ? cur.pajak : sim.pajak)}`} />}
+            {(paid ? cur.pajak : sim.pajak) > 0 && <Row l="Pajak" v={`- Rp ${fmt(paid ? cur.pajak : sim.pajak)}`} cls="text-red-500" />}
             <Row l="TOTAL" v={`Rp ${fmt(paid ? cur.total : sim.total)}`} cls="font-black text-[#0f2544] text-base pt-2 border-t-2 border-[#0f2544]" />
             {inv.panjar > 0 && (
               <>

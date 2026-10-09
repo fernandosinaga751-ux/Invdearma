@@ -1,7 +1,7 @@
 // src/pages/Invoices.jsx
 import { useState, useEffect } from 'react';
 import { Card, Input, Btn, Badge, Icons } from '../components/UI.jsx';
-import { fmt, formatDateID, todayStr, taxLabel, calcTotals } from '../lib/utils.js';
+import { fmt, formatDateID, todayStr, taxLabel, taxSign, calcTotals } from '../lib/utils.js';
 import { doPrint } from '../lib/print.js';
 import { deleteInvoice, updateInvoice, ensureShare, syncShare, deleteShare, setProposalStatus, closeShare, shareUrl } from '../lib/firebase.js';
 
@@ -280,7 +280,7 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
               </div>
             )}
             {invoice.ppnAmount > 0 && (
-              <div className="flex justify-between"><span className="text-slate-500">{taxLabel(invoice)}</span><span>Rp {fmt(invoice.ppnAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{taxLabel(invoice)}</span><span>{taxSign(invoice)}Rp {fmt(invoice.ppnAmount)}</span></div>
             )}
             <div className="flex justify-between pt-2 border-t-2 border-[#0f2544] text-base font-black text-[#0f2544]">
               <span>TOTAL</span><span>Rp {fmt(invoice.total)}</span>
@@ -343,7 +343,7 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
   // Terapkan usulan customer → update invoice, sinkron link, tandai 'applied'
   const handleApply = async (inv, pr) => {
     const t = calcTotals({ subtotal: inv.subtotal, diskon: pr.diskon, pajak: pr.pajak, panjar: inv.panjar });
-    const patch = { diskon: t.diskonAmt, ppn: 0, ppnAmount: t.pajak, ppnManual: true, total: t.total, panjar: t.panjarAmt, sisa: t.sisa, shareClosed: true };
+    const patch = { diskon: t.diskonAmt, ppn: 0, ppnAmount: t.pajak, ppnManual: true, taxMinus: true, total: t.total, panjar: t.panjarAmt, sisa: t.sisa, shareClosed: true };
     try {
       await updateInvoice(inv.id, patch);
       const updated = { ...inv, ...patch };

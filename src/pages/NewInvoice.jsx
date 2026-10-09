@@ -28,8 +28,8 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   const diskonAmt      = Math.min(Number(diskon) || 0, subtotal);
   const subtotalAfter  = subtotal - diskonAmt;
   const isManualTax    = pajakManual !== '';
-  const ppnAmt         = isManualTax ? Math.max(0, Math.round(Number(pajakManual) || 0)) : Math.round(subtotalAfter * ppnPct / 100);
-  const total          = subtotalAfter + ppnAmt;
+  const ppnAmt         = isManualTax ? Math.min(Math.max(0, Math.round(Number(pajakManual) || 0)), subtotalAfter) : Math.round(subtotalAfter * ppnPct / 100);
+  const total          = subtotalAfter - ppnAmt; // pajak = pengurang
   const panjarAmt      = Math.min(Number(panjar) || 0, total);
   const sisa           = total - panjarAmt;
   const previewNo = editingInvoice?.invoiceNo || genInvNo(invoices, date);
@@ -52,7 +52,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
         customerPhone: selCust.phone || '', customerAddress: selCust.address || '',
         date, dueDate,
         items: items.map(i => ({ ...i, qty: Number(i.qty) || 1, price: Number(i.price) || 0 })),
-        subtotal, diskon: diskonAmt, ppn: isManualTax ? 0 : ppnPct, ppnAmount: ppnAmt, ppnManual: isManualTax, total,
+        subtotal, diskon: diskonAmt, ppn: isManualTax ? 0 : ppnPct, ppnAmount: ppnAmt, ppnManual: isManualTax, taxMinus: true, total,
         panjar: panjarAmt, sisa,
         notes,
       };
@@ -137,7 +137,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
             <Input label="Tanggal Invoice" type="date" value={date} onChange={e => setDate(e.target.value)} />
             <Input label="Due Date / Jatuh Tempo (Opsional)" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">PPN</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Pajak (%) — dikurangkan dari total</label>
               <div className="flex gap-2 flex-wrap">
                 {[0, 2, 5, 10, 11, 12].map(p => (
                   <button
@@ -146,13 +146,13 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
                     className={`px-3 py-1.5 rounded-xl text-sm font-bold border-2 transition
                       ${!isManualTax && ppnPct === p ? 'bg-[#0f2544] text-white border-[#0f2544]' : 'border-slate-200 text-slate-600 hover:border-[#0f2544]'}`}
                   >
-                    {p === 0 ? 'Tanpa PPN' : `${p}%`}
+                    {p === 0 ? 'Tanpa Pajak' : `${p}%`}
                   </button>
                 ))}
               </div>
               <div className="mt-3">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  🧾 Nilai Pajak (Rp) — isi manual
+                  🧾 Nilai Pajak (Rp) — isi manual (mengurangi total)
                 </label>
                 <input
                   type="number" min="0"
@@ -257,8 +257,8 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
             )}
             {ppnAmt > 0 && (
               <div className="flex justify-between">
-                <span className="text-slate-500">{isManualTax ? 'Pajak' : `PPN ${ppnPct}%`}</span>
-                <span className="font-bold">Rp {fmt(ppnAmt)}</span>
+                <span className="text-slate-500">{isManualTax ? 'Pajak' : `Pajak ${ppnPct}%`}</span>
+                <span className="font-bold text-red-500">- Rp {fmt(ppnAmt)}</span>
               </div>
             )}
             <div className="flex justify-between pt-2 border-t-2 border-[#0f2544] text-base font-black text-[#0f2544]">
