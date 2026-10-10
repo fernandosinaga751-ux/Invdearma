@@ -180,7 +180,7 @@ export default function App() {
     switch (page) {
       case 'dashboard':   return <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} pendingCount={pendingCount} />;
       case 'customers':   return <Customers customers={customers} setCustomers={setCustomers} />;
-      case 'invoices':    return <Invoices  invoices={invoices} setInvoices={setInvoices} settings={settings}
+      case 'invoices':    return <Invoices  invoices={invoices} setInvoices={setInvoices} customers={customers} settings={settings}
                                     setPage={setPage} viewingId={viewingId} setViewingId={setViewingId}
                                     setEditingInvoice={setEditingInvoice}
                                     shares={shares} refreshShares={refreshShares} />;
