@@ -1,7 +1,7 @@
 // src/pages/Invoices.jsx
 import { useState, useEffect } from 'react';
 import { Card, Input, Btn, Badge, Icons } from '../components/UI.jsx';
-import { fmt, formatDateID, todayStr, taxLabel, taxSign, calcTotals } from '../lib/utils.js';
+import { fmt, formatDateID, todayStr, taxLabel, taxSign, calcTotals, buildInvoiceWaText, normalizeWaNumber } from '../lib/utils.js';
 import { doPrint } from '../lib/print.js';
 import { deleteInvoice, updateInvoice, ensureShare, syncShare, deleteShare, setProposalStatus, closeShare, shareUrl } from '../lib/firebase.js';
 
@@ -89,6 +89,98 @@ function BayarModal({ invoice, settings, onConfirm, onClose }) {
   );
 }
 
+// ─── Modal Kirim Teks Invoice ke WhatsApp ────────────────────────────────────
+function WaModal({ invoice, settings, customers = [], share, onClose }) {
+  const token   = invoice.shareToken || share?.token;
+  const hasLink = !!token && !invoice.shareClosed;
+  const withPhone = customers.filter(c => normalizeWaNumber(c.phone));
+  const owner = customers.find(c => c.id === invoice.customerId);
+
+  // default: nomor customer invoice ini; bila tidak ada → minta pilih / ketik
+  const defaultSel = normalizeWaNumber(owner?.phone || invoice.customerPhone) ? (owner?.id || '__inv') : '__manual';
+  const [sel, setSel]       = useState(defaultSel);
+  const [manual, setManual] = useState('');
+  const [useLink, setUseLink] = useState(hasLink);
+  const [text, setText]     = useState(() => buildInvoiceWaText(invoice, settings, hasLink ? shareUrl(token) : ''));
+
+  const toggleLink = v => {
+    setUseLink(v);
+    setText(buildInvoiceWaText(invoice, settings, v && hasLink ? shareUrl(token) : ''));
+  };
+
+  const number = sel === '__manual' ? normalizeWaNumber(manual)
+    : sel === '__inv' ? normalizeWaNumber(invoice.customerPhone)
+    : sel === '__pick' ? ''
+    : normalizeWaNumber(customers.find(c => c.id === sel)?.phone);
+
+  const canSend = sel === '__pick' || !!number;
+
+  const send = () => {
+    const url = `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(15,37,68,0.7)', backdropFilter: 'blur(4px)' }}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+        <div className="px-6 pt-6 pb-3 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl">💬</div>
+          <div>
+            <h2 className="font-black text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Kirim ke WhatsApp</h2>
+            <p className="text-xs text-slate-400 font-mono">{invoice.invoiceNo}</p>
+          </div>
+        </div>
+
+        <div className="px-6 pb-2 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Kirim ke nomor</label>
+            <select value={sel} onChange={e => setSel(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]">
+              {!owner && normalizeWaNumber(invoice.customerPhone) && (
+                <option value="__inv">{invoice.customerName} — {invoice.customerPhone}</option>
+              )}
+              {withPhone.map(c => (
+                <option key={c.id} value={c.id}>{c.name} — {c.phone}{c.id === invoice.customerId ? ' (customer invoice ini)' : ''}</option>
+              ))}
+              <option value="__manual">✏️ Ketik nomor lain...</option>
+              <option value="__pick">📱 Pilih kontak langsung di WhatsApp</option>
+            </select>
+            {sel === '__manual' && (
+              <input value={manual} onChange={e => setManual(e.target.value)} inputMode="tel" autoFocus
+                placeholder="08xxxxxxxxxx atau +62xxxxxxxxxx"
+                className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+            )}
+            <p className="text-xs text-slate-400 mt-1.5">
+              {sel === '__pick'
+                ? 'WhatsApp akan terbuka dan Anda memilih sendiri kontak tujuannya.'
+                : number ? `Akan dikirim ke +${number}` : 'Nomor belum valid.'}
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Isi pesan (bisa diedit)</label>
+              {hasLink && (
+                <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                  <input type="checkbox" checked={useLink} onChange={e => toggleLink(e.target.checked)} /> sertakan link
+                </label>
+              )}
+            </div>
+            <textarea value={text} onChange={e => setText(e.target.value)} rows={12}
+              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 pt-2 flex gap-3">
+          <Btn variant="green" onClick={send} disabled={!canSend} className="flex-1 justify-center py-3">💬 Buka WhatsApp & Kirim</Btn>
+          <Btn variant="ghost" onClick={onClose} className="px-5">Batal</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Panel Link Customer + Usulan Perubahan ──────────────────────────────────
 function SharePanel({ invoice, share, settings, onShared, onApply, onReject }) {
   const closed = !!invoice.shareClosed;
@@ -164,7 +256,7 @@ function SharePanel({ invoice, share, settings, onShared, onApply, onReject }) {
 }
 
 // ─── Detail / View Invoice ────────────────────────────────────────────────────
-function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBayar, onShared, onApply, onReject }) {
+function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBayar, onWa, onShared, onApply, onReject }) {
   if (!invoice) return (
     <div className="p-6">
       <p className="text-slate-400 mb-4">Invoice tidak ditemukan.</p>
@@ -186,6 +278,7 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
           </span>
         )}
         <Btn variant="outline" onClick={() => onEdit(invoice)}>{Icons.edit} Edit</Btn>
+        <Btn variant="green" onClick={() => onWa(invoice)}>💬 Kirim WA</Btn>
         <Btn variant="primary" onClick={() => doPrint(invoice, 'invoice', settings)}>
           {Icons.print} Cetak Invoice
         </Btn>
@@ -329,9 +422,10 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
 }
 
 // ─── Invoices List ────────────────────────────────────────────────────────────
-export default function Invoices({ invoices, setInvoices, settings, setPage, viewingId, setViewingId, setEditingInvoice, shares = {}, refreshShares = () => {} }) {
+export default function Invoices({ invoices, setInvoices, customers = [], settings, setPage, viewingId, setViewingId, setEditingInvoice, shares = {}, refreshShares = () => {} }) {
   const [search, setSearch]     = useState('');
   const [bayarInv, setBayarInv] = useState(null); // invoice yg sedang dikonfirmasi bayar
+  const [waInv, setWaInv]       = useState(null); // invoice yg akan dikirim lewat WhatsApp
 
   // Cek usulan customer terbaru setiap halaman ini dibuka
   useEffect(() => { refreshShares(); }, []);
@@ -398,7 +492,11 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
           onEdit={handleEdit}
           onDelete={handleDelete}
           onBayar={inv => setBayarInv(inv)}
+          onWa={inv => setWaInv(inv)}
         />
+        {waInv && (
+          <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onClose={() => setWaInv(null)} />
+        )}
         {bayarInv && (
           <BayarModal
             invoice={bayarInv}
@@ -499,6 +597,8 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
                               : <button onClick={() => setBayarInv(inv)} title="Sudah Bayar"
                                   className="px-2 py-1 text-[10px] font-black rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition">BAYAR</button>
                             }
+                            <button onClick={() => setWaInv(inv)} title="Kirim WhatsApp"
+                              className="px-2 py-1 text-[10px] font-black rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition">WA</button>
                             <button onClick={() => handleEdit(inv)} title="Edit"
                               className="p-1.5 text-slate-400 hover:text-[#0f2544] hover:bg-slate-100 rounded-lg transition">{Icons.edit}</button>
                             <button onClick={() => handleDelete(inv.id)} title="Hapus"
@@ -514,6 +614,10 @@ export default function Invoices({ invoices, setInvoices, settings, setPage, vie
           )}
         </Card>
       </div>
+
+      {waInv && (
+        <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onClose={() => setWaInv(null)} />
+      )}
 
       {/* Modal bayar (dari list) */}
       {bayarInv && (

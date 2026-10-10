@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Card, Input, Btn } from '../components/UI.jsx';
 import { toB64 } from '../lib/utils.js';
+import SignaturePad from '../components/SignaturePad.jsx';
 import { saveSettings as fbSaveSettings, changeAccountPassword } from '../lib/firebase.js';
 
 export default function Settings({ settings, setSettings, sessionKind, fbUser }) {
@@ -11,6 +12,7 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
   const [saved, setSaved]   = useState(false);
   const [pwMsg, setPwMsg]   = useState('');
   const [saving, setSaving] = useState(false);
+  const [showPad, setShowPad] = useState(false);
 
   const handleImg = async (field, e) => {
     const file = e.target.files[0];
@@ -49,7 +51,7 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
     }
   };
 
-  const ImgUpload = ({ field, label, desc, emoji }) => (
+  const ImgUpload = ({ field, label, desc, emoji, canDraw = false }) => (
     <div>
       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
       <div className="flex items-center gap-4">
@@ -63,6 +65,12 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
             📤 Upload {label}
             <input type="file" accept="image/*" className="hidden" onChange={e => handleImg(field, e)} />
           </label>
+          {canDraw && (
+            <button onClick={() => setShowPad(true)}
+              className="ml-2 px-3 py-2 bg-[#0f2544] hover:bg-[#1a3a6b] text-white text-sm font-bold rounded-xl transition">
+              ✍️ Gambar Langsung
+            </button>
+          )}
           {form[field] && (
             <button onClick={() => setForm(f => ({ ...f, [field]: null }))} className="ml-2 text-xs text-red-500 hover:underline">Hapus</button>
           )}
@@ -106,10 +114,17 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
         </h3>
         <div className="space-y-5">
           <ImgUpload field="logo"      label="Logo Perusahaan"   emoji="🏢" desc="Tampil di header invoice & halaman login. PNG/JPG, max 2MB." />
-          <ImgUpload field="signature" label="Tanda Tangan"      emoji="✍️" desc="Tanda tangan pimpinan di bagian bawah invoice & kwitansi." />
+          <ImgUpload field="signature" label="Tanda Tangan"      emoji="✍️" canDraw desc="Upload gambar, atau gambar langsung di layar. Tampil di bagian bawah invoice & kwitansi." />
           <ImgUpload field="stamp"     label="Cap / Stempel"     emoji="🔴" desc="Gunakan background transparan (PNG) untuk hasil terbaik." />
         </div>
       </Card>
+
+      {showPad && (
+        <SignaturePad
+          onClose={() => setShowPad(false)}
+          onSave={url => { setForm(f => ({ ...f, signature: url })); setShowPad(false); }}
+        />
+      )}
 
       <div className="flex gap-3">
         <Btn onClick={handleSave} disabled={saving}>
