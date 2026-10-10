@@ -13,11 +13,67 @@ export const formatDateID = d => {
   return `${dt.getDate()} ${MONTHS_ID[dt.getMonth()]} ${dt.getFullYear()}`;
 };
 
+// Nomor urut invoice di-reset setiap tanggal: invoice pertama di tanggal itu = 01,
+// berikutnya 02, 03, dst. Tanggal berikutnya kembali ke 01.
+// Memakai nomor TERBESAR yang sudah ada di tanggal tsb (bukan sekadar jumlah),
+// supaya tidak bentrok bila ada invoice yang dihapus.
 export function genInvNo(invoices, dateStr) {
+  const seqOf = no => {
+    const m = String(no || '').match(/^\s*No\.?\s*(\d+)/i);
+    return m ? parseInt(m[1], 10) : 0;
+  };
   const same = invoices.filter(i => i.date === dateStr);
-  const n = same.length + 1;
+  const n = Math.max(same.length, ...same.map(i => seqOf(i.invoiceNo))) + 1;
   const d = new Date(dateStr + 'T00:00:00');
   return `No.${String(n).padStart(2, '0')}/${ROMAN[d.getMonth()]}/DRM/${d.getFullYear()}`;
+}
+
+// ─── WhatsApp ────────────────────────────────────────────────────────────────
+// Ubah 08xxx / +62xxx / 62xxx menjadi format internasional tanpa tanda (62xxx)
+export function normalizeWaNumber(raw) {
+  let n = String(raw || '').replace(/[^\d]/g, '');
+  if (!n) return '';
+  if (n.startsWith('0')) n = '62' + n.slice(1);
+  else if (n.startsWith('8')) n = '62' + n;
+  return n;
+}
+
+// Susun teks invoice untuk dikirim lewat WhatsApp
+export function buildInvoiceWaText(inv, settings = {}, link = '') {
+  const L = [];
+  L.push(`*INVOICE ${settings.companyName || 'Dearma Rental Mobil Medan'}*`);
+  L.push(`No. Invoice: ${inv.invoiceNo}`);
+  L.push(`Tanggal: ${formatDateID(inv.date)}`);
+  if (inv.dueDate) L.push(`Jatuh Tempo: ${formatDateID(inv.dueDate)}`);
+  L.push('');
+  L.push(`Kepada Yth. *${inv.customerName}*`);
+  L.push('');
+  L.push('*Rincian:*');
+  (inv.items || []).forEach((it, i) => {
+    const q = Number(it.qty) || 0, pr = Number(it.price) || 0;
+    L.push(`${i + 1}. ${it.description} (${q} x Rp ${fmt(pr)}) = Rp ${fmt(q * pr)}`);
+  });
+  L.push('');
+  L.push(`Subtotal: Rp ${fmt(inv.subtotal)}`);
+  if (inv.diskon > 0) L.push(`Diskon: - Rp ${fmt(inv.diskon)}`);
+  if (inv.ppnAmount > 0) L.push(`${taxLabel(inv)}: ${taxSign(inv)}Rp ${fmt(inv.ppnAmount)}`);
+  L.push(`*TOTAL: Rp ${fmt(inv.total)}*`);
+  if (inv.panjar > 0) {
+    L.push(`Panjar / DP: - Rp ${fmt(inv.panjar)}`);
+    L.push(`*SISA BAYAR: Rp ${fmt(inv.sisa)}*`);
+  }
+  if (inv.paidDate) L.push(`\n✅ *LUNAS* (${formatDateID(inv.paidDate)})`);
+  if (inv.notes) L.push(`\nCatatan: ${inv.notes}`);
+  if (settings.bankName || settings.bankAccount) {
+    L.push('');
+    L.push('*Pembayaran ke:*');
+    L.push(`${settings.bankName || ''} ${settings.bankAccount || ''}`.trim());
+    if (settings.ownerName) L.push(`a/n ${settings.ownerName}`);
+  }
+  if (link) { L.push(''); L.push(`Lihat invoice online: ${link}`); }
+  L.push('');
+  L.push('Terima kasih 🙏');
+  return L.join('\n');
 }
 
 export async function toB64(file) {
