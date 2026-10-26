@@ -5,9 +5,11 @@ import { uid, fmt, formatDateID, todayStr, taxLabel, taxSign, calcTotals, buildI
 import { doPrint } from '../lib/print.js';
 import PaymentsPanel from '../components/PaymentsPanel.jsx';
 import HandoverModal from '../components/HandoverModal.jsx';
+import HandoverLinkPanel, { HandoverWaModal } from '../components/HandoverLinkPanel.jsx';
 import { LockedTeaser } from '../components/FeatureGate.jsx';
 import { paidTotal, outstanding } from '../lib/rental.js';
-import { deleteInvoice, updateInvoice, ensureShare, syncShare, deleteShare, setProposalStatus, closeShare, shareUrl } from '../lib/firebase.js';
+import { deleteInvoice, updateInvoice, ensureShare, syncShare, deleteShare, setProposalStatus, closeShare, shareUrl,
+  pushHandoverToLink, syncHandoverLink, deleteHandoverLink, getHandoverLink } from '../lib/firebase.js';
 
 // ─── Modal "Sudah Bayar" → Konfirmasi + Cetak Kwitansi ───────────────────────
 function BayarModal({ invoice, settings, onConfirm, onClose }) {
@@ -294,7 +296,7 @@ function SharePanel({ invoice, share, settings, onShared, onApply, onReject }) {
 }
 
 // ─── Detail / View Invoice ────────────────────────────────────────────────────
-function ViewInvoice({ invoice, share, settings, can = () => false, setPage, onBack, onEdit, onDelete, onBayar, onWa, onSavePatch, onHandover, onShared, onApply, onReject }) {
+function ViewInvoice({ invoice, share, settings, can = () => false, setPage, onBack, onEdit, onDelete, onBayar, onWa, onSavePatch, onHandover, onShared, onApply, onReject, onHandoverToken, onHandoverPulled }) {
   if (!invoice) return (
     <div className="p-6">
       <p className="text-slate-400 mb-4">Invoice tidak ditemukan.</p>
@@ -361,6 +363,13 @@ function ViewInvoice({ invoice, share, settings, can = () => false, setPage, onB
           <Btn variant="outline" onClick={() => onHandover(invoice)}>{invoice.handover ? 'Buka / Edit' : 'Isi Serah Terima'}</Btn>
         </Card>
       ) : <LockedTeaser featureId="handover" setPage={setPage} />}
+
+      {/* Petugas serah terima: link + WhatsApp */}
+      {can('handover') && (
+        <HandoverLinkPanel invoice={invoice} settings={settings}
+          onTokenChange={t => onHandoverToken(invoice.id, t)}
+          onPulled={(h, o) => onHandoverPulled(invoice, h, o)} />
+      )}
 
       {/* Invoice card */}
       <Card>
@@ -492,6 +501,7 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
   const [bayarInv, setBayarInv] = useState(null); // invoice yg sedang dikonfirmasi bayar
   const [waInv, setWaInv]       = useState(null); // invoice yg akan dikirim lewat WhatsApp
   const [hoInv, setHoInv]       = useState(null); // invoice yg sedang diisi serah terimanya
+  const [hoWaInv, setHoWaInv]   = useState(null); // invoice yg link serah terimanya akan dikirim ke petugas via WA
 
   // Cek usulan customer terbaru setiap halaman ini dibuka
   useEffect(() => { refreshShares(); }, []);
@@ -507,6 +517,24 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
   const patchInvoice = (id, patch) => setInvoices(invoices.map(i => i.id === id ? { ...i, ...patch } : i));
 
   const handleShared = (id, token) => { patchInvoice(id, { shareToken: token, shareClosed: false }); refreshShares(); };
+
+  // ── Link serah terima untuk petugas ──
+  const handleHandoverToken = (id, token) => setInvoices(list => list.map(i => i.id === id ? { ...i, handoverToken: token } : i));
+  // Isian petugas yang lebih baru → masuk ke invoice (tanpa mendorong balik ke link)
+  const handleHandoverPulled = async (inv, handover, { alreadySaved = false } = {}) => {
+    if (!alreadySaved) await updateInvoice(inv.id, { handover });
+    setInvoices(list => list.map(i => i.id === inv.id ? { ...i, handover } : i));
+  };
+  // Sebelum admin membuka form serah terima, ambil dulu isian terbaru petugas supaya tidak tertimpa
+  const openHandover = async inv => {
+    if (inv.handoverToken) {
+      try {
+        const l = await getHandoverLink(inv.handoverToken);
+        if (l?.handover?.updatedAt && l.handover.updatedAt > (inv.handover?.updatedAt || '')) await handleHandoverPulled(inv, l.handover);
+      } catch (e) { console.warn('openHandover:', e); }
+    }
+    setHoInv(inv);
+  };
 
   // Terapkan usulan customer → update invoice, sinkron link, tandai 'applied'
   const handleApply = async (inv, pr) => {
@@ -530,6 +558,7 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
   const handleDelete = async id => {
     if (!confirm('Hapus invoice ini? Tidak dapat dibatalkan.')) return;
     await deleteShare(invoices.find(i => i.id === id)?.shareToken);
+    await deleteHandoverLink(invoices.find(i => i.id === id)?.handoverToken);
     await deleteInvoice(id);
     setInvoices(invoices.filter(i => i.id !== id));
     setViewingId(null);
@@ -542,6 +571,11 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
     await updateInvoice(inv.id, patch);
     setInvoices(list => list.map(i => i.id === inv.id ? { ...i, ...patch } : i));
     syncShare({ ...inv, ...patch }, settings);
+    // Link petugas: dorong data serah terima dari admin & segarkan salinan invoice di link
+    if (inv.handoverToken) {
+      if (patch.handover) pushHandoverToLink(inv.handoverToken, patch.handover);
+      syncHandoverLink({ ...inv, ...patch }, settings);
+    }
   };
 
   // Denda dari serah terima → masuk ke rincian invoice, total dihitung ulang
@@ -588,7 +622,8 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
       <>
         <ViewInvoice
           invoice={inv} settings={settings} share={inv ? shares[inv.id] : null}
-          can={can} setPage={setPage} onSavePatch={savePatch} onHandover={i => setHoInv(i)}
+          can={can} setPage={setPage} onSavePatch={savePatch} onHandover={openHandover}
+          onHandoverToken={handleHandoverToken} onHandoverPulled={handleHandoverPulled}
           onShared={t => handleShared(inv.id, t)} onApply={handleApply} onReject={handleReject}
           onBack={() => setViewingId(null)}
           onEdit={handleEdit}
@@ -598,6 +633,10 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
         />
         {waInv && (
           <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onShared={t => handleShared(waInv.id, t)} onClose={() => setWaInv(null)} />
+        )}
+        {hoWaInv && (
+          <HandoverWaModal invoice={invoices.find(i => i.id === hoWaInv.id) || hoWaInv} settings={settings}
+            onTokenChange={t => handleHandoverToken(hoWaInv.id, t)} onClose={() => setHoWaInv(null)} />
         )}
         {hoInv && (() => {
           const cur = invoices.find(i => i.id === hoInv.id) || hoInv;
@@ -710,6 +749,10 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
                               : <button onClick={() => setBayarInv(inv)} title="Sudah Bayar"
                                   className="px-2 py-1 text-[10px] font-black rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition">BAYAR</button>
                             }
+                            {can('handover') && inv.handoverStaff?.name && (
+                              <button onClick={() => setHoWaInv(inv)} title={`Kirim link serah terima ke ${inv.handoverStaff.name} via WhatsApp`}
+                                className="px-2 py-1 text-[10px] font-black rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition">SERAH</button>
+                            )}
                             <button onClick={() => setWaInv(inv)} title="Kirim WhatsApp"
                               className="px-2 py-1 text-[10px] font-black rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition">WA</button>
                             <button onClick={() => handleEdit(inv)} title="Edit"
@@ -730,6 +773,11 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
 
       {waInv && (
         <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onShared={t => handleShared(waInv.id, t)} onClose={() => setWaInv(null)} />
+      )}
+
+      {hoWaInv && (
+        <HandoverWaModal invoice={invoices.find(i => i.id === hoWaInv.id) || hoWaInv} settings={settings}
+          onTokenChange={t => handleHandoverToken(hoWaInv.id, t)} onClose={() => setHoWaInv(null)} />
       )}
 
       {/* Modal bayar (dari list) */}

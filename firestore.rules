@@ -62,6 +62,30 @@ service cloud.firestore {
         || (request.auth != null && resource.data.uid == request.auth.uid && resource.data.status == 'pending');
     }
 
+    // ── Link serah terima untuk petugas ───────────────────────────
+    // Petugas (tanpa login) membuka satu dokumen lewat token, mencatat kondisi mobil,
+    // dan HANYA boleh mengubah field `handover`. Tidak bisa list. Membuat link butuh
+    // fitur 'handover' (atau admin utama).
+    match /handovers/{token} {
+      allow get: if true;
+      allow list: if request.auth != null
+        && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && (isAdmin() || hasFeature(request.auth.uid, 'handover'));
+      allow delete: if request.auth != null
+        && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow update: if
+        (request.auth != null && (resource.data.ownerUid == request.auth.uid || isAdmin()))
+        || (
+          resource.data.get('closed', false) != true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handover'])
+          && request.resource.data.handover is map
+          && request.resource.data.handover.keys().hasOnly(
+               ['vehicleName','plate','idNo','out','back','finesAddedAt','officerName','updatedAt'])
+        );
+    }
+
     // ── Link invoice untuk customer ───────────────────────────────
     // Customer (tanpa login) hanya boleh MEMBACA satu dokumen lewat token
     // dan MENGUBAH field `proposal` (diskon & pajak). Tidak bisa list.

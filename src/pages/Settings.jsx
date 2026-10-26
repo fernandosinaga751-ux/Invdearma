@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Card, Input, Btn } from '../components/UI.jsx';
 import { toB64 } from '../lib/utils.js';
 import SignaturePad from '../components/SignaturePad.jsx';
-import { DEFAULT_WA_RETURN, DEFAULT_WA_BOOKING, DEFAULT_WA_BILL, DEFAULT_TERMS } from '../lib/rental.js';
+import { DEFAULT_WA_RETURN, DEFAULT_WA_BOOKING, DEFAULT_WA_BILL, DEFAULT_WA_HANDOVER, DEFAULT_TERMS } from '../lib/rental.js';
 import { saveSettings as fbSaveSettings, changeAccountPassword } from '../lib/firebase.js';
 
 export default function Settings({ settings, setSettings, sessionKind, fbUser, can = () => false }) {
@@ -176,6 +176,19 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser, c
           <p className="text-xs text-slate-400">Satu pasal per baris. Kosongkan untuk memakai pasal bawaan. Mohon tinjau isinya agar sesuai usaha Anda — ini bukan nasihat hukum.</p>
           <textarea rows={8} value={form.contractTerms || ''} onChange={e => setForm({ ...form, contractTerms: e.target.value })} placeholder={DEFAULT_TERMS.join('\n')}
             className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+        </Card>
+      )}
+
+      {can('handover') && (
+        <Card className="p-5 space-y-2">
+          <h3 className="font-bold text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>💬 Pesan WhatsApp Serah Terima</h3>
+          <p className="text-xs text-slate-400">
+            Dikirim ke <strong>petugas serah terima</strong> bersama link-nya. Placeholder: {'{nama_petugas} {perusahaan} {penyewa} {hp_penyewa} {mobil} {plat} {tgl_ambil} {tgl_kembali} {no_invoice} {link}'}.
+            Link tetap otomatis ditambahkan di akhir pesan bila {'{link}'} tidak ditulis.
+          </p>
+          <textarea rows={7} value={form.waHandover || ''} onChange={e => setForm({ ...form, waHandover: e.target.value })} placeholder={DEFAULT_WA_HANDOVER}
+            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+          <p className="text-[11px] text-slate-400">Kosongkan untuk memakai teks bawaan.</p>
         </Card>
       )}
 

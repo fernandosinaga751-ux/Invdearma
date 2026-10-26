@@ -181,6 +181,29 @@ export const DEFAULT_WA_BILL =
   'Halo {nama}, kami dari {perusahaan}. Mengingatkan tagihan invoice {no_invoice} sebesar Rp {sisa} ' +
   'yang belum kami terima{jatuh_tempo}. Mohon konfirmasinya. Terima kasih 🙏';
 
+export const DEFAULT_WA_HANDOVER =
+  'Halo {nama_petugas}, kami dari {perusahaan}. Mohon bantu serah terima mobil {mobil} ({plat}) ' +
+  'untuk penyewa {penyewa} (invoice {no_invoice}), jadwal {tgl_ambil} s.d. {tgl_kembali}.\n\n' +
+  'Silakan catat kondisi mobil & minta tanda tangan penyewa lewat link berikut:\n{link}\n\n' +
+  'Setelah selesai, unduh PDF perjanjian dari link tersebut dan berikan kepada penyewa. Terima kasih 🙏';
+
+// Susun pesan WA untuk petugas serah terima. Link selalu ikut walau template tidak memuat {link}.
+export function buildHandoverWaText(invoice, settings = {}, link = '') {
+  const r = invoice.rental || {}, h = invoice.handover || {};
+  const staff = invoice.handoverStaff?.name || '';
+  const data = {
+    nama: staff, nama_petugas: staff,
+    perusahaan: settings.companyName || 'Dearma Rental Mobil Medan',
+    penyewa: invoice.customerName || '-', hp_penyewa: invoice.customerPhone || '-',
+    mobil: r.vehicleName || h.vehicleName || '-', plat: r.plate || h.plate || '-',
+    tgl_ambil: r.pickupAt ? fmtDT(r.pickupAt) : '-', tgl_kembali: r.returnAt ? fmtDT(r.returnAt) : '-',
+    no_invoice: invoice.invoiceNo || '-', link,
+  };
+  let t = fillTemplate(settings.waHandover || DEFAULT_WA_HANDOVER, data);
+  if (link && !t.includes(link)) t += `\n\n${link}`;
+  return t;
+}
+
 export const DEFAULT_TERMS = [
   'Penyewa wajib menggunakan kendaraan sesuai peruntukannya dan tidak untuk kegiatan melanggar hukum.',
   'Penyewa bertanggung jawab penuh atas kendaraan selama masa sewa, termasuk kehilangan, kerusakan, dan pelanggaran lalu lintas.',

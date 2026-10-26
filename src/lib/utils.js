@@ -158,6 +158,7 @@ export const DEF_SETTINGS = {
   waReturn: '',
   waBooking: '',
   waBill: '',
+  waHandover: '',
   contractTerms: '',
 };
 
@@ -202,6 +203,15 @@ export function terbilang(n) {
   const str = parts.join(' ') + ' rupiah';
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+// Escape teks yang disisipkan ke HTML cetak/PDF. WAJIB untuk data yang bisa diisi
+// lewat link publik (mis. catatan kondisi dari petugas serah terima).
+export const escHtml = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+// Hanya izinkan gambar data-URL (TTD/logo) masuk ke atribut src
+export const safeImg = v => (/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(String(v || '')) ? String(v) : '');
 
 // Nama file (judul dokumen cetak/PDF) = nama pemesan
 export const fileNameSafe = name =>

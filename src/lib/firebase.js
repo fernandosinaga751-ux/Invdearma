@@ -14,6 +14,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { shrinkImage } from './utils.js';
 import { withRequires } from './features.js';
+import { HANDOVER_CHECKS } from './rental.js';
 
 const cfg = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -490,4 +491,165 @@ export async function submitProposal(token, { diskon, pajak }) {
       submittedAt: new Date().toISOString(),
     },
   });
+}
+
+// ─── LINK SERAH TERIMA (petugas mencatat kondisi mobil tanpa login) ─────────
+// Dokumen publik `handovers/{token}`: satu link per invoice. Token acak panjang
+// = "kunci" link. Petugas hanya bisa MENGUBAH field `handover` (checklist, KM, BBM,
+// catatan, tanda tangan); data invoice di dokumen ini hanyalah salinan baca-saja.
+export const HANDOVER_COL = 'handovers';
+
+export function handoverUrl(token) {
+  return `${window.location.origin}/h/${token}`;
+}
+
+async function buildHandoverSnapshot(invoice, settings = {}) {
+  const logo = await shrinkImage(settings.logo, 160, { allowJpeg: true });
+  const r = invoice.rental?.vehicleId ? invoice.rental : null;
+  const d = invoice.deposit;
+  return {
+    ownerUid: auth.currentUser.uid,
+    invoiceId: invoice.id,
+    updatedAt: new Date().toISOString(),
+    staff: {
+      name: String(invoice.handoverStaff?.name || '').trim().slice(0, 80),
+      phone: String(invoice.handoverStaff?.phone || '').trim().slice(0, 30),
+    },
+    invoice: {
+      invoiceNo: invoice.invoiceNo || '',
+      customerName: invoice.customerName || '',
+      customerPhone: invoice.customerPhone || '',
+      customerAddress: invoice.customerAddress || '',
+      total: Number(invoice.total) || 0,
+      rental: r ? {
+        vehicleName: r.vehicleName || '', plate: r.plate || '', pickupAt: r.pickupAt || '', returnAt: r.returnAt || '',
+        days: r.days || 0, withDriver: !!r.withDriver, driverName: r.driverName || '', destination: r.destination || '',
+      } : null,
+      deposit: d ? { type: d.type || 'uang', item: d.item || '', amount: Number(d.amount) || 0, status: d.status || '' } : null,
+    },
+    company: {
+      companyName: settings.companyName || '',
+      address: settings.address || '',
+      phone: settings.phone || '',
+      ownerName: settings.ownerName || '',
+      contractTerms: String(settings.contractTerms || '').slice(0, 6000),
+      logo,
+    },
+  };
+}
+
+const newerHandover = (a, b) => ((a?.updatedAt || '') >= (b?.updatedAt || '') ? a : b);
+
+export async function getHandoverLink(token) {
+  if (!token) return null;
+  const s = await getDoc(doc(db, HANDOVER_COL, token));
+  return s.exists() ? { token, ...s.data() } : null;
+}
+export const getPublicHandover = getHandoverLink;
+
+// Buat (atau perbarui) link serah terima sebuah invoice. Mengembalikan token.
+// Data `handover` di dokumen link TIDAK ditimpa saat pembaruan biasa.
+export async function ensureHandoverLink(invoice, settings, { forceNew = false } = {}) {
+  const fresh = forceNew || !invoice.handoverToken;
+  let carry = invoice.handover || null;
+  if (forceNew && invoice.handoverToken) {
+    try {
+      const old = await getHandoverLink(invoice.handoverToken);
+      if (old?.handover) carry = carry ? newerHandover(carry, old.handover) : old.handover;
+    } catch (e) { console.warn('handover lama:', e); }
+    await deleteHandoverLink(invoice.handoverToken);
+  }
+  const token = fresh ? newShareToken() : invoice.handoverToken;
+  const payload = await buildHandoverSnapshot(invoice, settings);
+  if (fresh && carry) payload.handover = carry; // bawa data yang sudah pernah diisi
+  await setDoc(doc(db, HANDOVER_COL, token), payload, { merge: true });
+  if (fresh) await updateInvoice(invoice.id, { handoverToken: token });
+  return token;
+}
+
+// Sinkronkan salinan data invoice di link (diam-diam, tidak melempar error)
+export async function syncHandoverLink(invoice, settings) {
+  if (!invoice?.handoverToken || !invoice.handoverStaff?.name) return;
+  try { await ensureHandoverLink(invoice, settings); } catch (e) { console.warn('syncHandoverLink:', e); }
+}
+
+// Admin menyimpan data serah terima dari aplikasi → dorong ke link supaya petugas melihat versi terbaru
+export async function pushHandoverToLink(token, handover) {
+  if (!token || !handover) return;
+  try { await updateDoc(doc(db, HANDOVER_COL, token), { handover }); } catch (e) { console.warn('pushHandoverToLink:', e); }
+}
+
+export async function deleteHandoverLink(token) {
+  if (!token) return;
+  try { await deleteDoc(doc(db, HANDOVER_COL, token)); } catch (e) { console.warn('deleteHandoverLink:', e); }
+}
+
+// Hapus link, tapi selamatkan dulu isian petugas yang belum sempat ditarik ke invoice.
+// Mengembalikan data handover yang lebih baru (atau null bila tidak ada).
+export async function removeHandoverLink(invoice) {
+  if (!invoice?.handoverToken) return null;
+  let rescued = null;
+  try {
+    const l = await getHandoverLink(invoice.handoverToken);
+    if (l?.handover && (l.handover.updatedAt || '') > (invoice.handover?.updatedAt || '')) rescued = l.handover;
+  } catch (e) { console.warn('removeHandoverLink:', e); }
+  if (rescued) await updateInvoice(invoice.id, { handover: rescued });
+  await deleteHandoverLink(invoice.handoverToken);
+  return rescued;
+}
+
+// Semua link milik user yang sedang login → { [invoiceId]: linkDoc }
+export async function getHandoverLinks() {
+  try {
+    const q = query(collection(db, HANDOVER_COL), where('ownerUid', '==', auth.currentUser.uid));
+    const snap = await getDocs(q);
+    const map = {};
+    snap.docs.forEach(d => { const v = d.data(); if (v.invoiceId) map[v.invoiceId] = { token: d.id, ...v }; });
+    return map;
+  } catch (e) { console.warn('getHandoverLinks:', e); return {}; }
+}
+
+// Tarik isian petugas yang lebih baru ke invoice. Mengembalikan daftar { id, handover } yang diperbarui.
+export async function pullHandoverUpdates(invoices) {
+  const links = await getHandoverLinks();
+  const patched = [];
+  for (const inv of invoices) {
+    const h = links[inv.id]?.handover;
+    if (h?.updatedAt && h.updatedAt > (inv.handover?.updatedAt || '')) {
+      try { await updateInvoice(inv.id, { handover: h }); patched.push({ id: inv.id, handover: h }); }
+      catch (e) { console.warn('pullHandoverUpdates:', e); }
+    }
+  }
+  return { links, patched };
+}
+
+// ── Sisi petugas (tanpa login) ──
+const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
+const cleanSig = v => (/^data:image\/(png|jpe?g|webp);base64,/.test(String(v || '')) && String(v).length < 150000 ? String(v) : '');
+function cleanSide(x = {}) {
+  const checks = {};
+  HANDOVER_CHECKS.forEach(c => { checks[c] = cut(x.checks?.[c] || 'Baik', 40); });
+  return {
+    at: cut(x.at, 20), km: cut(x.km, 10), fuel: cut(x.fuel || 'Penuh', 12), checks,
+    notes: cut(x.notes, 600), custSig: cleanSig(x.custSig), staffSig: cleanSig(x.staffSig),
+  };
+}
+
+export async function submitHandover(token, data) {
+  const ref = doc(db, HANDOVER_COL, token);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Link tidak ditemukan atau sudah dinonaktifkan.');
+  const cur = snap.data();
+  if (cur.closed) throw new Error('Link ini sudah tidak berlaku.');
+  const prev = cur.handover || {};
+  const clean = {
+    vehicleName: cut(data.vehicleName, 80), plate: cut(data.plate, 20), idNo: cut(data.idNo, 40),
+    out: cleanSide(data.out),
+    back: { ...cleanSide(data.back), fines: prev.back?.fines || [] }, // denda hanya diatur admin
+    finesAddedAt: prev.finesAddedAt || '',
+    officerName: cut(cur.staff?.name, 80),
+    updatedAt: new Date().toISOString(),
+  };
+  await updateDoc(ref, { handover: clean });
+  return clean;
 }

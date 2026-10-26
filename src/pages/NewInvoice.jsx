@@ -1,8 +1,8 @@
 // src/pages/NewInvoice.jsx
 import { useState } from 'react';
 import { Card, Input, Btn, Icons } from '../components/UI.jsx';
-import { fmt, uid, todayStr, genInvNo } from '../lib/utils.js';
-import { addInvoice, updateInvoice, syncShare, updateIn } from '../lib/firebase.js';
+import { fmt, uid, todayStr, genInvNo, normalizeWaNumber } from '../lib/utils.js';
+import { addInvoice, updateInvoice, syncShare, updateIn, ensureHandoverLink, removeHandoverLink } from '../lib/firebase.js';
 import RentalCard, { EMPTY_RENTAL } from '../components/RentalCard.jsx';
 import { LockedTeaser } from '../components/FeatureGate.jsx';
 import { calcRental, findConflicts, fmtDT } from '../lib/rental.js';
@@ -38,6 +38,9 @@ export default function NewInvoice({
   const [diskon, setDiskon]   = useState(editingInvoice?.diskon || 0);
   const [panjar, setPanjar]   = useState(editingInvoice?.panjar || 0);
   const [saving, setSaving]   = useState(false);
+  // Petugas serah terima mobil (fitur Perjanjian & Serah Terima)
+  const [staffName, setStaffName]   = useState(editingInvoice?.handoverStaff?.name || '');
+  const [staffPhone, setStaffPhone] = useState(editingInvoice?.handoverStaff?.phone || '');
 
   const filtCust = customers.filter(c =>
     c.name.toLowerCase().includes(custQuery.toLowerCase())
@@ -57,9 +60,30 @@ export default function NewInvoice({
   const removeItem = id => items.length > 1 && setItems(items.filter(i => i.id !== id));
   const updItem    = (id, f, v) => setItems(items.map(i => i.id === id ? { ...i, [f]: v } : i));
 
+  // Ada nama petugas → buat/perbarui link serah terima. Nama dikosongkan → link dimatikan.
+  const linkAfterSave = async inv => {
+    if (!can('handover')) return inv;
+    try {
+      if (inv.handoverStaff?.name) {
+        const token = await ensureHandoverLink(inv, settings);
+        return { ...inv, handoverToken: token };
+      }
+      if (inv.handoverToken) {
+        const rescued = await removeHandoverLink(inv);
+        await updateInvoice(inv.id, { handoverToken: null });
+        return { ...inv, handoverToken: null, ...(rescued ? { handover: rescued } : {}) };
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Invoice sudah tersimpan, tetapi link serah terima belum bisa dibuat: ' + e.message + '\n\nPastikan Firestore Rules terbaru sudah dipublikasikan (lihat README). Anda bisa membuatnya lagi dari detail invoice.');
+    }
+    return inv;
+  };
+
   const handleSave = async () => {
     if (!selCust)                            return alert('Pilih customer terlebih dahulu!');
     if (items.some(i => !i.description.trim())) return alert('Keterangan item tidak boleh kosong!');
+    if (can('handover') && staffPhone.trim() && normalizeWaNumber(staffPhone).length < 9) return alert('Nomor HP petugas serah terima tidak valid. Contoh: 08123456789');
     // Cek jadwal bentrok bila ada data sewa
     const hasRental = can('booking') && rental.vehicleId;
     if (hasRental) {
@@ -82,6 +106,9 @@ export default function NewInvoice({
         panjar: panjarAmt, sisa,
         notes,
       };
+      if (can('handover')) {
+        payload.handoverStaff = staffName.trim() ? { name: staffName.trim(), phone: staffPhone.trim() } : null;
+      }
       if (can('booking')) {
         if (rental.vehicleId) {
           const c = calcRental({ pickupAt: rental.pickupAt, returnAt: rental.returnAt, rate: rental.rate, overtimeRate: rental.overtimeRate, graceHours });
@@ -93,13 +120,15 @@ export default function NewInvoice({
       if (editingInvoice) {
         await updateInvoice(editingInvoice.id, payload);
         syncShare({ ...editingInvoice, ...payload }, settings); // perbarui link customer bila ada
-        const updated = invoices.map(i => i.id === editingInvoice.id ? { ...i, ...payload } : i);
+        const merged = await linkAfterSave({ ...editingInvoice, ...payload });
+        const updated = invoices.map(i => i.id === editingInvoice.id ? { ...i, ...merged } : i);
         setInvoices(updated);
         setEditingInvoice(null);
         setViewingId(editingInvoice.id);
       } else {
         const added = await addInvoice(payload);
-        setInvoices([{ ...payload, id: added.id, createdAt: new Date().toISOString() }, ...invoices]);
+        const full = await linkAfterSave({ ...payload, id: added.id, createdAt: new Date().toISOString() });
+        setInvoices([full, ...invoices]);
         setViewingId(added.id);
         // Booking yang dikonversi → tautkan ke invoice supaya tidak tampil ganda di kalender
         if (draft) {
@@ -241,6 +270,21 @@ export default function NewInvoice({
           </div>
         </Card>
       </div>
+
+      {/* Petugas serah terima mobil (fitur Perjanjian & Serah Terima) */}
+      {can('handover') && (
+        <Card className="p-5">
+          <h3 className="font-bold text-[#0f2544] mb-1 flex items-center gap-2">📝 Petugas Serah Terima Mobil <span className="text-xs font-normal text-slate-400">(opsional)</span></h3>
+          <p className="text-xs text-slate-400 mb-3">
+            Isi nama petugas yang menyerahkan mobil ke penyewa. Setelah invoice disimpan, <strong>link serah terima otomatis dibuat</strong> — petugas mencatat mobil &
+            kondisinya, meminta tanda tangan penyewa, lalu mengunduh PDF perjanjian untuk diberikan ke penyewa. Isi nomor HP agar link bisa dikirim lewat tombol WhatsApp.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Input label="Nama Petugas" value={staffName} onChange={e => setStaffName(e.target.value)} placeholder="mis. Pak Budi" />
+            <Input label="No. HP / WhatsApp Petugas" type="tel" inputMode="tel" value={staffPhone} onChange={e => setStaffPhone(e.target.value)} placeholder="08xxxxxxxxxx" />
+          </div>
+        </Card>
+      )}
 
       {/* Detail sewa (fitur Booking) — terkunci untuk akun tanpa izin */}
       {can('booking')

@@ -24,7 +24,7 @@ import { DEF_SETTINGS } from './lib/utils.js';
 import {
   watchAuthState, bindAndVerifyAccount, logoutSession,
   getSettings, getCustomers, getInvoices, getShares,
-  listCol, getMyAccess, createFeatureRequest, cancelFeatureRequest, getAllFeatureRequests,
+  listCol, getMyAccess, createFeatureRequest, cancelFeatureRequest, getAllFeatureRequests, pullHandoverUpdates,
 } from './lib/firebase.js';
 
 const NAV_TITLES = {
@@ -155,6 +155,14 @@ export default function App() {
           catch (e) { console.warn('getMyAccess:', e.message); }
         } else { refreshAdminPending(); }
         await loadFeatureData(sessionKind, feats);
+
+        // Isian petugas serah terima (lewat link) yang lebih baru → masuk ke invoice (di latar belakang)
+        if (canUse(sessionKind, feats, 'handover')) {
+          pullHandoverUpdates(i || []).then(({ patched }) => {
+            if (cancelled || !patched.length) return;
+            setInvoices(list => list.map(x => { const p = patched.find(y => y.id === x.id); return p ? { ...x, handover: p.handover } : x; }));
+          }).catch(e => console.warn('pullHandoverUpdates:', e.message));
+        }
       } catch(e) {
         if (cancelled) return;
         const msg = e.message === 'timeout'

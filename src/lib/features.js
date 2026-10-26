@@ -46,6 +46,8 @@ export const FEATURES = [
     points: [
       'Checklist kondisi mobil saat diambil & dikembalikan, KM awal/akhir, level BBM',
       'Tanda tangan customer dan petugas langsung di layar',
+      'Isi nama & HP petugas di invoice → link serah terima otomatis dibuat; petugas mencatat kondisi mobil & minta TTD penyewa tanpa login',
+      'Link + pesan WhatsApp (template bisa diubah) dikirim ke petugas, yang bisa mengunduh PDF perjanjian untuk diberikan ke penyewa',
       'Denda BBM / kerusakan bisa langsung ditambahkan ke invoice',
       'Cetak / simpan PDF surat perjanjian lengkap dengan pasal-pasal yang bisa Anda ubah',
     ],

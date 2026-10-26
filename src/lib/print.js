@@ -1,5 +1,5 @@
 // src/lib/print.js
-import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel, taxSign } from './utils.js';
+import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel, taxSign, escHtml as E, safeImg } from './utils.js';
 import { paidTotal, outstanding, fmtDT, DEFAULT_TERMS, HANDOVER_CHECKS } from './rental.js';
 
 // ════════════════════════════════════════════════════════════════
@@ -1030,7 +1030,7 @@ export function buildSingleCardPreviewHTML(data, side, templateId = 'navy-road')
 // ════════════════════════════════════════════════════════════════
 // PERJANJIAN SEWA & BERITA ACARA SERAH TERIMA
 // ════════════════════════════════════════════════════════════════
-export function buildHandoverHTML(invoice, settings) {
+export function buildHandoverHTML(invoice, settings, { autoPrint = true } = {}) {
   const co = settings.companyName || 'Dearma Rental Mobil Medan';
   const h = invoice.handover || {};
   const r = invoice.rental || {};
@@ -1039,19 +1039,24 @@ export function buildHandoverHTML(invoice, settings) {
   const plate = h.plate || r.plate || '-';
   const terms = (settings.contractTerms || '').split('\n').map(x => x.trim()).filter(Boolean);
   const clauses = terms.length ? terms : DEFAULT_TERMS;
-  const checkRows = (side) => HANDOVER_CHECKS.map(c => `<tr><td>${c}</td><td>${(side.checks || {})[c] || '-'}</td></tr>`).join('');
+  const checkRows = (side) => HANDOVER_CHECKS.map(c => `<tr><td>${E(c)}</td><td>${E((side.checks || {})[c] || '-')}</td></tr>`).join('');
   const dep = invoice.deposit;
-  const sig = (img, label) => `<div class="sg"><div class="sg-img">${img ? `<img src="${img}">` : ''}</div><div class="sg-line"></div><div class="sg-lbl">${label}</div></div>`;
+  const sig = (img, label) => { const src = safeImg(img); return `<div class="sg"><div class="sg-img">${src ? `<img src="${src}">` : ''}</div><div class="sg-line"></div><div class="sg-lbl">${E(label)}</div></div>`; };
   const fines = (back.fines || []).filter(f => f.desc);
+  const staffName = (h.officerName || invoice.handoverStaff?.name || '').trim();
+  const staffLbl = staffName ? `Petugas: ${staffName}` : 'Petugas ' + co;
+  const logo = safeImg(settings.logo);
 
   return `<!DOCTYPE html>
-<html lang="id"><head><meta charset="UTF-8"><title>Serah Terima ${fileNameSafe(invoice.customerName)}</title>
+<html lang="id"><head><meta charset="UTF-8"><title>Serah Terima ${E(fileNameSafe(invoice.customerName))}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:210mm;}
-  body{font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#1a1a2e;font-size:11px;line-height:1.5;}
-  .page{width:210mm;padding:13mm 15mm;}
+  body{font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#1a1a2e;font-size:11px;line-height:1.5;background:#fff;}
+  .page{width:210mm;}
+  .sheet{width:210mm;padding:13mm 15mm;background:#fff;}
+  .sheet + .sheet{page-break-before:always;}
   .hd{display:flex;align-items:center;gap:12px;border-bottom:3px solid #0f2544;padding-bottom:10px;margin-bottom:12px;}
   .hd img{width:56px;height:56px;object-fit:contain;}
   .co{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#0f2544;}
@@ -1069,54 +1074,56 @@ export function buildHandoverHTML(invoice, settings) {
   .sg-img{height:62px;display:flex;align-items:flex-end;justify-content:center;} .sg-img img{max-height:60px;max-width:100%;}
   .sg-line{border-bottom:1px solid #333;margin:2px 8px;} .sg-lbl{font-size:9.5px;color:#444;margin-top:2px;}
   .note{background:#fffbeb;border:1px solid #fbbf24;border-radius:6px;padding:5px 9px;font-size:10px;margin-top:5px;}
-  .pb{page-break-before:always;}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}@page{size:A4 portrait;margin:0;}}
 </style></head><body><div class="page">
+<section class="sheet">
   <div class="hd">
-    ${settings.logo ? `<img src="${settings.logo}">` : ''}
-    <div><div class="co">${co}</div><div class="sub">${[settings.address, settings.phone ? '📞 ' + settings.phone : ''].filter(Boolean).join(' · ')}</div></div>
+    ${logo ? `<img src="${logo}">` : ''}
+    <div><div class="co">${E(co)}</div><div class="sub">${[E(settings.address), settings.phone ? '📞 ' + E(settings.phone) : ''].filter(Boolean).join(' · ')}</div></div>
   </div>
   <h1>SURAT PERJANJIAN SEWA KENDARAAN<br>& BERITA ACARA SERAH TERIMA</h1>
-  <div class="no">Ref. Invoice ${invoice.invoiceNo}</div>
+  <div class="no">Ref. Invoice ${E(invoice.invoiceNo)}</div>
 
   <h3>Para Pihak</h3>
   <table class="kv">
-    <tr><td>Pihak Pertama (Pemilik)</td><td>${settings.ownerName || co} — ${co}</td></tr>
-    <tr><td>Pihak Kedua (Penyewa)</td><td><strong>${invoice.customerName}</strong>${invoice.customerPhone ? ` · 📞 ${invoice.customerPhone}` : ''}${invoice.customerAddress ? `<br>${invoice.customerAddress}` : ''}${h.idNo ? `<br>No. KTP/SIM: ${h.idNo}` : ''}</td></tr>
+    <tr><td>Pihak Pertama (Pemilik)</td><td>${E(settings.ownerName || co)} — ${E(co)}</td></tr>
+    <tr><td>Pihak Kedua (Penyewa)</td><td><strong>${E(invoice.customerName)}</strong>${invoice.customerPhone ? ` · 📞 ${E(invoice.customerPhone)}` : ''}${invoice.customerAddress ? `<br>${E(invoice.customerAddress)}` : ''}${h.idNo ? `<br>No. KTP/SIM: ${E(h.idNo)}` : ''}</td></tr>
   </table>
 
   <h3>Objek Sewa</h3>
   <table class="kv">
-    <tr><td>Kendaraan</td><td>${veh} · Plat <strong>${plate}</strong></td></tr>
-    <tr><td>Periode Sewa</td><td>${r.pickupAt ? `${fmtDT(r.pickupAt)} s.d. ${fmtDT(r.returnAt)}${r.days ? ` (${r.days} hari)` : ''}` : '-'}</td></tr>
-    <tr><td>Tujuan / Keperluan</td><td>${r.destination || '-'}${r.withDriver ? ` · dengan sopir${r.driverName ? ' (' + r.driverName + ')' : ''}` : ' · lepas kunci'}</td></tr>
+    <tr><td>Kendaraan</td><td>${E(veh)} · Plat <strong>${E(plate)}</strong></td></tr>
+    <tr><td>Periode Sewa</td><td>${r.pickupAt ? `${fmtDT(r.pickupAt)} s.d. ${fmtDT(r.returnAt)}${r.days ? ` (${E(r.days)} hari)` : ''}` : '-'}</td></tr>
+    <tr><td>Tujuan / Keperluan</td><td>${E(r.destination || '-')}${r.withDriver ? ` · dengan sopir${r.driverName ? ' (' + E(r.driverName) + ')' : ''}` : ' · lepas kunci'}</td></tr>
     <tr><td>Biaya Sewa</td><td>Rp ${fmt(invoice.total)}</td></tr>
-    ${dep ? `<tr><td>Deposit / Jaminan</td><td>${dep.type === 'barang' ? `Barang: ${dep.item || '-'}` : `Uang Rp ${fmt(dep.amount)}`} · ${dep.status === 'dikembalikan' ? 'sudah dikembalikan' : 'ditahan'}</td></tr>` : ''}
+    ${dep ? `<tr><td>Deposit / Jaminan</td><td>${dep.type === 'barang' ? `Barang: ${E(dep.item || '-')}` : `Uang Rp ${fmt(dep.amount)}`} · ${dep.status === 'dikembalikan' ? 'sudah dikembalikan' : 'ditahan'}</td></tr>` : ''}
   </table>
 
   <h3>Ketentuan Sewa</h3>
-  <ol>${clauses.map(c => `<li>${c}</li>`).join('')}</ol>
+  <ol>${clauses.map(c => `<li>${E(c)}</li>`).join('')}</ol>
+</section>
 
-  <div class="pb"></div>
+<section class="sheet">
   <h3>A. Serah Terima — Pengambilan Kendaraan</h3>
   <div class="two">
-    <table class="kv"><tr><td>Waktu</td><td>${out.at ? fmtDT(out.at) : '-'}</td></tr><tr><td>KM Awal</td><td>${out.km || '-'}</td></tr><tr><td>BBM</td><td>${out.fuel || '-'}</td></tr></table>
+    <table class="kv"><tr><td>Waktu</td><td>${out.at ? fmtDT(out.at) : '-'}</td></tr><tr><td>KM Awal</td><td>${E(out.km || '-')}</td></tr><tr><td>BBM</td><td>${E(out.fuel || '-')}</td></tr></table>
     <table><tr><th>Pemeriksaan</th><th>Kondisi</th></tr>${checkRows(out)}</table>
   </div>
-  ${out.notes ? `<div class="note"><strong>Catatan kondisi awal:</strong> ${out.notes}</div>` : ''}
-  <div class="sgs"><div></div>${sig(out.custSig, 'Penyewa')}${sig(out.staffSig, 'Petugas ' + co)}<div></div></div>
+  ${out.notes ? `<div class="note"><strong>Catatan kondisi awal:</strong> ${E(out.notes)}</div>` : ''}
+  <div class="sgs"><div></div>${sig(out.custSig, 'Penyewa')}${sig(out.staffSig, staffLbl)}<div></div></div>
 
   <h3>B. Serah Terima — Pengembalian Kendaraan</h3>
   <div class="two">
-    <table class="kv"><tr><td>Waktu</td><td>${back.at ? fmtDT(back.at) : '-'}</td></tr><tr><td>KM Akhir</td><td>${back.km || '-'}</td></tr><tr><td>BBM</td><td>${back.fuel || '-'}</td></tr>
+    <table class="kv"><tr><td>Waktu</td><td>${back.at ? fmtDT(back.at) : '-'}</td></tr><tr><td>KM Akhir</td><td>${E(back.km || '-')}</td></tr><tr><td>BBM</td><td>${E(back.fuel || '-')}</td></tr>
       <tr><td>Jarak Tempuh</td><td>${out.km && back.km ? fmt(Math.max(0, Number(back.km) - Number(out.km))) + ' km' : '-'}</td></tr></table>
     <table><tr><th>Pemeriksaan</th><th>Kondisi</th></tr>${checkRows(back)}</table>
   </div>
-  ${back.notes ? `<div class="note"><strong>Catatan kondisi akhir:</strong> ${back.notes}</div>` : ''}
-  ${fines.length ? `<table style="margin-top:6px;"><tr><th>Denda / Biaya Tambahan</th><th style="width:120px;text-align:right;">Jumlah</th></tr>${fines.map(f => `<tr><td>${f.desc}</td><td style="text-align:right;">Rp ${fmt(f.amount)}</td></tr>`).join('')}</table>` : ''}
-  <div class="sgs"><div></div>${sig(back.custSig, 'Penyewa')}${sig(back.staffSig, 'Petugas ' + co)}<div></div></div>
+  ${back.notes ? `<div class="note"><strong>Catatan kondisi akhir:</strong> ${E(back.notes)}</div>` : ''}
+  ${fines.length ? `<table style="margin-top:6px;"><tr><th>Denda / Biaya Tambahan</th><th style="width:120px;text-align:right;">Jumlah</th></tr>${fines.map(f => `<tr><td>${E(f.desc)}</td><td style="text-align:right;">Rp ${fmt(f.amount)}</td></tr>`).join('')}</table>` : ''}
+  <div class="sgs"><div></div>${sig(back.custSig, 'Penyewa')}${sig(back.staffSig, staffLbl)}<div></div></div>
+</section>
 </div>
-<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+${autoPrint ? '<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>' : ''}
 </body></html>`;
 }
 

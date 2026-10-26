@@ -4,25 +4,12 @@ import { Modal, Input, Select, Btn } from './UI.jsx';
 import SignaturePad from './SignaturePad.jsx';
 import { fmt, shrinkImage } from '../lib/utils.js';
 import { HANDOVER_CHECKS, FUEL_LEVELS } from '../lib/rental.js';
+import { CONDITIONS, initHandover } from '../lib/handoverForm.js';
 import { doPrintHandover } from '../lib/print.js';
-
-const CONDITIONS = ['Baik', 'Lecet / cacat ringan', 'Rusak', 'Tidak ada'];
-const pad = n => String(n).padStart(2, '0');
-const nowLocal = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const defChecks = () => Object.fromEntries(HANDOVER_CHECKS.map(c => [c, 'Baik']));
-const defSide = () => ({ at: nowLocal(), km: '', fuel: 'Penuh', checks: defChecks(), notes: '', custSig: '', staffSig: '' });
 
 export default function HandoverModal({ invoice, settings, onSave, onAddFines, onClose }) {
   const r = invoice.rental || {};
-  const [h, setH] = useState(() => {
-    const cur = invoice.handover || {};
-    return {
-      vehicleName: cur.vehicleName ?? r.vehicleName ?? '', plate: cur.plate ?? r.plate ?? '', idNo: cur.idNo || '',
-      out: { ...defSide(), ...(cur.out || {}), checks: { ...defChecks(), ...(cur.out?.checks || {}) } },
-      back: { ...defSide(), at: '', ...(cur.back || {}), checks: { ...defChecks(), ...(cur.back?.checks || {}) }, fines: cur.back?.fines || [] },
-      finesAddedAt: cur.finesAddedAt || '',
-    };
-  });
+  const [h, setH] = useState(() => initHandover(invoice.handover || {}, r));
   const [tab, setTab]   = useState('out');
   const [pad_, setPad]  = useState(null); // { side, who }
   const [busy, setBusy] = useState(false);
@@ -118,7 +105,7 @@ export default function HandoverModal({ invoice, settings, onSave, onAddFines, o
         </div>
         <Input label="Catatan kondisi" value={side.notes} onChange={e => setSide({ notes: e.target.value })} placeholder="mis. lecet kecil di bumper depan kiri" />
 
-        <div className="grid grid-cols-2 gap-3 mt-4"><SigBox who="custSig" label="Penyewa" /><SigBox who="staffSig" label="Petugas" /></div>
+        <div className="grid grid-cols-2 gap-3 mt-4"><SigBox who="custSig" label="Penyewa" /><SigBox who="staffSig" label={invoice.handoverStaff?.name ? `Petugas: ${invoice.handoverStaff.name}` : 'Petugas'} /></div>
 
         {tab === 'back' && (
           <div className="mt-5 border-t border-slate-100 pt-4">

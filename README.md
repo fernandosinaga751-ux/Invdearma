@@ -450,7 +450,7 @@ di menu **Pengajuan Fitur** (atau mengatur langsung lewat **Daftar Akun → ✨ 
 | 🚗 Armada, Sopir & Pengingat | data mobil/sopir, tarif, pengingat STNK/pajak/KIR/servis |
 | 📅 Booking, Kalender & Sewa Otomatis | kalender per mobil, deteksi bentrok, hitung hari & overtime, WA pengingat (butuh Armada) |
 | 💳 Pembayaran Bertahap, Deposit, QRIS & Materai | riwayat cicilan, kwitansi per pembayaran, deposit/jaminan |
-| 📝 Perjanjian & Serah Terima | checklist kondisi, KM/BBM, TTD di layar, denda → invoice |
+| 📝 Perjanjian & Serah Terima | checklist kondisi, KM/BBM, TTD di layar, denda → invoice, **link & WA untuk petugas serah terima** |
 | 🧰 Pengeluaran & Laba per Mobil | catatan biaya & laba per mobil |
 | 📊 Laporan & Piutang | grafik, piutang & tagih WA, ekspor Excel (CSV) |
 | 🪪 Data Customer Lengkap | NIK, foto KTP/SIM, riwayat sewa, tanda bermasalah |
@@ -469,3 +469,34 @@ di menu **Pengajuan Fitur** (atau mengatur langsung lewat **Daftar Akun → ✨ 
   dikunci di antarmuka; koleksi terpisah (armada, sopir, booking, pengeluaran) dikunci juga di Firestore Rules.
 - Foto KTP/SIM disimpan terkompresi di dokumen customer dan **tidak** ikut ke link customer.
 - Backup JSON belum punya fitur pemulihan otomatis.
+
+
+---
+
+## Petugas Serah Terima Mobil (link + WhatsApp)
+
+Bagian dari fitur **📝 Perjanjian & Serah Terima**.
+
+**Alur**
+1. Saat membuat/mengedit invoice, isi **Nama Petugas** (dan **No. HP/WhatsApp**) di kartu *Petugas Serah Terima Mobil*.
+2. Setelah invoice disimpan, **link serah terima otomatis dibuat** (format `https://domain-anda/h/<token>`) — satu link per invoice/penyewa.
+   Bila nama petugas dikosongkan lalu disimpan, link otomatis dimatikan.
+3. Di detail invoice muncul panel **👤 Petugas Serah Terima**: salin link, **💬 Kirim Link via WA** (tombol aktif bila nomor HP terisi),
+   muat isian terbaru, unduh PDF, buat link baru, atau nonaktifkan. Di daftar invoice juga ada tombol **SERAH** (muncul bila ada nama petugas).
+4. Petugas membuka link di HP (tanpa login): mencatat mobil & kondisinya (checklist, KM, BBM, catatan), meminta **tanda tangan penyewa** di layar,
+   menekan **Simpan** atau **Simpan & Unduh PDF Perjanjian**, lalu memberikan PDF-nya ke penyewa (di HP yang mendukung ada tombol **Bagikan**).
+5. Isian petugas otomatis masuk ke *Perjanjian & Serah Terima* pada invoice (saat aplikasi dibuka, saat membuka detail invoice, atau lewat tombol 🔄).
+   Denda tetap hanya bisa diatur admin; petugas hanya melihatnya.
+
+**Template WhatsApp** bisa diubah di **Pengaturan → 💬 Pesan WhatsApp Serah Terima**. Placeholder:
+`{nama_petugas} {perusahaan} {penyewa} {hp_penyewa} {mobil} {plat} {tgl_ambil} {tgl_kembali} {no_invoice} {link}`.
+Link selalu ikut terkirim walau template tidak memuat `{link}`.
+
+**WAJIB setelah update ini:** publikasikan ulang `firestore.rules` (ada koleksi baru `handovers`; ganti `admin@email-anda.com`).
+Tanpa itu link tidak bisa dibuat/dibuka.
+
+**Catatan keamanan**
+- Link bersifat "siapa pun yang punya link bisa membuka & mengisi" (token acak 36 karakter) — kirim hanya ke petugas yang bersangkutan.
+  Bila link bocor atau tugas selesai, klik **Nonaktifkan** atau **Link Baru**.
+- Halaman petugas menampilkan nama, HP, alamat penyewa, mobil, jadwal, dan total sewa (sama seperti isi surat perjanjian). Foto KTP/SIM **tidak** ikut.
+- Semua teks yang diisi petugas di-escape sebelum masuk ke dokumen cetak/PDF.
