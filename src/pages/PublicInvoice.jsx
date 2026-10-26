@@ -1,8 +1,10 @@
 // src/pages/PublicInvoice.jsx
 // Halaman publik untuk customer: lihat invoice, ubah HANYA diskon & pajak, kirim usulan.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fmt, formatDateID, calcTotals } from '../lib/utils.js';
 import { getPublicShare, submitProposal } from '../lib/firebase.js';
+import { renderKwitansiCanvas, downloadKwitansiPdf } from '../lib/kwitansiPdf.js';
+import { sortedPayments, paymentKwitansiInvoice, paidTotal, outstanding, fmtDT } from '../lib/rental.js';
 
 const inputCls = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]';
 
@@ -170,7 +172,123 @@ export default function PublicInvoice({ token }) {
           </div>
         )}
       </div>
+
+      {/* Detail sewa */}
+      {inv.rental && (
+        <div className="mt-5 bg-white rounded-3xl shadow-xl border border-slate-100 p-5 sm:p-6 text-sm">
+          <div className="font-black text-[#0f2544] text-lg mb-2" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>🚗 Detail Sewa</div>
+          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-slate-600">
+            <div><span className="text-slate-400">Kendaraan:</span> <strong>{inv.rental.vehicleName}{inv.rental.plate ? ` (${inv.rental.plate})` : ''}</strong></div>
+            <div><span className="text-slate-400">Durasi:</span> <strong>{inv.rental.days || '-'} hari</strong>{inv.rental.withDriver ? ' · dengan sopir' : ''}</div>
+            <div><span className="text-slate-400">Ambil:</span> <strong>{fmtDT(inv.rental.pickupAt)}</strong></div>
+            <div><span className="text-slate-400">Kembali:</span> <strong>{fmtDT(inv.rental.returnAt)}</strong></div>
+            {inv.rental.destination && <div className="sm:col-span-2"><span className="text-slate-400">Tujuan:</span> <strong>{inv.rental.destination}</strong></div>}
+          </div>
+        </div>
+      )}
+
+      {/* Riwayat pembayaran bertahap */}
+      {(inv.payments || []).length > 0 && (
+        <div className="mt-5 bg-white rounded-3xl shadow-xl border border-slate-100 p-5 sm:p-6 text-sm">
+          <div className="font-black text-[#0f2544] text-lg mb-3" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>💳 Riwayat Pembayaran</div>
+          <div className="divide-y divide-slate-100">
+            {inv.panjar > 0 && <div className="flex justify-between py-2"><span className="text-slate-600">Panjar / DP</span><strong className="text-amber-600">Rp {fmt(inv.panjar)}</strong></div>}
+            {sortedPayments(inv).map((p, i) => (
+              <div key={p.id} className="flex justify-between py-2">
+                <span className="text-slate-600">Pembayaran ke-{i + 1} · {formatDateID(p.date)} <span className="text-xs text-slate-400">{p.method}</span></span>
+                <strong className="text-emerald-600">Rp {fmt(p.amount)}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between pt-3 mt-1 border-t-2 border-slate-200 font-black">
+            <span>{outstanding(inv) > 0 ? 'Sisa tagihan' : 'Lunas'}</span>
+            <span className={outstanding(inv) > 0 ? 'text-amber-600' : 'text-emerald-600'}>Rp {fmt(outstanding(inv))}</span>
+          </div>
+        </div>
+      )}
+
+      {/* QRIS */}
+      {co.qris && !paid && (
+        <div className="mt-5 bg-white rounded-3xl shadow-xl border border-slate-100 p-5 sm:p-6 text-center">
+          <div className="font-black text-[#0f2544] mb-2">📲 Bayar via QRIS</div>
+          <img src={co.qris} alt="QRIS" className="mx-auto w-48 h-48 object-contain border border-slate-200 rounded-xl" />
+          <p className="text-xs text-slate-400 mt-2">Pindai dengan aplikasi bank / e-wallet Anda.</p>
+        </div>
+      )}
+
+      {/* Kwitansi: satu per pembayaran bila dibayar bertahap, atau satu kwitansi pelunasan */}
+      {(inv.payments || []).length > 0
+        ? sortedPayments(inv).map((p, i) => (
+            <KwitansiSection key={p.id} inv={paymentKwitansiInvoice(inv, p)} co={co} paid paidDate={p.date}
+              title={`🧾 Kwitansi Pembayaran ke-${i + 1}`} sub={`${formatDateID(p.date)} · Rp ${fmt(p.amount)}`} suffix={`Pembayaran ${i + 1}`} />
+          ))
+        : <KwitansiSection inv={inv} co={co} paid={paid} paidDate={inv.paidDate || (share.updatedAt || '').slice(0, 10) || inv.date} />}
     </Shell>
+  );
+}
+
+// ─── Kwitansi: tampil & bisa diunduh setelah invoice lunas ──────────────────
+function KwitansiSection({ inv, co, paid, paidDate, title = '🧾 Kwitansi', sub = '', suffix = '' }) {
+  const canvasRef = useRef(null);
+  const [img, setImg]     = useState('');
+  const [state, setState] = useState(paid ? 'loading' : 'unpaid'); // loading | ok | error | unpaid
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!paid) return;
+    let dead = false;
+    setState('loading');
+    (async () => {
+      try {
+        const kwInvoice = { ...inv, paidDate };
+        const kwSettings = { ...co };
+        const canvas = await renderKwitansiCanvas(kwInvoice, kwSettings);
+        if (dead) return;
+        canvasRef.current = canvas;
+        setImg(canvas.toDataURL('image/png'));
+        setState('ok');
+      } catch (e) { console.error(e); if (!dead) setState('error'); }
+    })();
+    return () => { dead = true; };
+  }, [paid, paidDate, inv.invoiceNo]);
+
+  const download = async () => {
+    if (!canvasRef.current) return;
+    setSaving(true);
+    try { await downloadKwitansiPdf(canvasRef.current, inv, suffix); }
+    catch (e) { console.error(e); alert('Gagal membuat PDF: ' + e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="mt-5 bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+      <div className="p-5 sm:p-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
+        <div>
+          <div className="font-black text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>{title}</div>
+          <div className="text-xs text-slate-400">{sub ? `${sub} · ` : ''}Bukti pembayaran untuk invoice {inv.invoiceNo}</div>
+        </div>
+        {state === 'ok' && (
+          <button onClick={download} disabled={saving}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl transition text-sm">
+            {saving ? 'Menyiapkan PDF...' : '⬇️ Download Kwitansi (PDF)'}
+          </button>
+        )}
+      </div>
+
+      <div className="p-4 sm:p-6">
+        {state === 'unpaid' && (
+          <div className="text-center py-8 text-sm text-slate-500">
+            <div className="text-3xl mb-2">⏳</div>
+            Kwitansi akan muncul di sini dan bisa diunduh setelah pembayaran dinyatakan lunas.
+          </div>
+        )}
+        {state === 'loading' && <div className="text-center py-10 text-slate-400 text-sm">Menyiapkan kwitansi...</div>}
+        {state === 'error' && <div className="text-center py-8 text-sm text-red-500">Kwitansi gagal ditampilkan. Coba muat ulang halaman.</div>}
+        {state === 'ok' && (
+          <img src={img} alt={`Kwitansi ${inv.invoiceNo}`} className="w-full h-auto rounded-xl border border-slate-200 shadow-sm" />
+        )}
+      </div>
+    </div>
   );
 }
 

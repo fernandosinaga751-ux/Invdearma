@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { Card, Input, Btn } from '../components/UI.jsx';
 import { toB64 } from '../lib/utils.js';
 import SignaturePad from '../components/SignaturePad.jsx';
+import { DEFAULT_WA_RETURN, DEFAULT_WA_BOOKING, DEFAULT_WA_BILL, DEFAULT_TERMS } from '../lib/rental.js';
 import { saveSettings as fbSaveSettings, changeAccountPassword } from '../lib/firebase.js';
 
-export default function Settings({ settings, setSettings, sessionKind, fbUser }) {
+export default function Settings({ settings, setSettings, sessionKind, fbUser, can = () => false }) {
   const [form, setForm]     = useState({ ...settings });
   const [newPw, setNewPw]   = useState('');
   const [confPw, setConfPw] = useState('');
@@ -124,6 +125,58 @@ export default function Settings({ settings, setSettings, sessionKind, fbUser })
           onClose={() => setShowPad(false)}
           onSave={url => { setForm(f => ({ ...f, signature: url })); setShowPad(false); }}
         />
+      )}
+
+      {/* ── Pengaturan fitur tambahan (hanya tampil bila fiturnya terbuka) ── */}
+      {can('payments') && (
+        <Card className="p-5">
+          <h3 className="font-bold text-[#0f2544] mb-1 text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>💳 QRIS & Materai</h3>
+          <p className="text-xs text-slate-400 mb-4">Fitur Pembayaran — QRIS tampil di invoice, materai tersedia di kwitansi.</p>
+          <ImgUpload field="qris" label="Gambar QRIS" emoji="🔳" desc="Unggah gambar QRIS toko Anda (PNG/JPG, max 2MB). Tampil di invoice dan halaman link customer." />
+          <label className="flex items-center gap-2 text-sm text-slate-600 mt-4 cursor-pointer">
+            <input type="checkbox" checked={!!form.materai} onChange={e => setForm({ ...form, materai: e.target.checked })} />
+            Sediakan ruang "Tempel Materai" di kwitansi
+          </label>
+        </Card>
+      )}
+
+      {can('booking') && (
+        <Card className="p-5 space-y-4">
+          <div>
+            <h3 className="font-bold text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>📅 Aturan Sewa & Pesan WhatsApp</h3>
+            <p className="text-xs text-slate-400">Fitur Booking. Placeholder yang bisa dipakai: {'{nama} {mobil} {plat} {tgl_ambil} {tgl_kembali} {perusahaan}'}</p>
+          </div>
+          <div className="max-w-xs">
+            <Input label="Toleransi Keterlambatan (jam)" type="number" min="0" value={form.graceHours ?? 1} onChange={e => setForm({ ...form, graceHours: Number(e.target.value) })} />
+            <p className="text-[11px] text-slate-400 mt-1">Kelebihan jam di atas toleransi dihitung overtime per jam (maks. sama dengan tarif 1 hari).</p>
+          </div>
+          {[['waReturn', 'Pengingat pengembalian mobil', DEFAULT_WA_RETURN], ['waBooking', 'Konfirmasi booking', DEFAULT_WA_BOOKING]].map(([k, l, def]) => (
+            <div key={k}>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">{l}</label>
+              <textarea rows={3} value={form[k] || ''} onChange={e => setForm({ ...form, [k]: e.target.value })} placeholder={def}
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+              <p className="text-[11px] text-slate-400">Kosongkan untuk memakai teks bawaan.</p>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {can('reports') && (
+        <Card className="p-5 space-y-2">
+          <h3 className="font-bold text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>📊 Pesan Penagihan Piutang</h3>
+          <p className="text-xs text-slate-400">Placeholder: {'{nama} {perusahaan} {no_invoice} {sisa} {jatuh_tempo}'}</p>
+          <textarea rows={3} value={form.waBill || ''} onChange={e => setForm({ ...form, waBill: e.target.value })} placeholder={DEFAULT_WA_BILL}
+            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+        </Card>
+      )}
+
+      {can('handover') && (
+        <Card className="p-5 space-y-2">
+          <h3 className="font-bold text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>📝 Pasal Perjanjian Sewa</h3>
+          <p className="text-xs text-slate-400">Satu pasal per baris. Kosongkan untuk memakai pasal bawaan. Mohon tinjau isinya agar sesuai usaha Anda — ini bukan nasihat hukum.</p>
+          <textarea rows={8} value={form.contractTerms || ''} onChange={e => setForm({ ...form, contractTerms: e.target.value })} placeholder={DEFAULT_TERMS.join('\n')}
+            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
+        </Card>
       )}
 
       <div className="flex gap-3">

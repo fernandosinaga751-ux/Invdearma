@@ -70,10 +70,64 @@ export function buildInvoiceWaText(inv, settings = {}, link = '') {
     L.push(`${settings.bankName || ''} ${settings.bankAccount || ''}`.trim());
     if (settings.ownerName) L.push(`a/n ${settings.ownerName}`);
   }
-  if (link) { L.push(''); L.push(`Lihat invoice online: ${link}`); }
+  if (link) {
+    L.push('');
+    L.push(inv.paidDate ? `Lihat invoice & unduh kwitansi: ${link}` : `Lihat invoice online (kwitansi bisa diunduh setelah lunas): ${link}`);
+  }
   L.push('');
   L.push('Terima kasih 🙏');
   return L.join('\n');
+}
+
+// Perkecil gambar (data URL) agar muat di dokumen link customer (batas Firestore 1MB).
+// PNG dipertahankan supaya transparansi TTD/stempel tidak hilang.
+export function shrinkImage(src, max = 420, { allowJpeg = false } = {}) {
+  return new Promise(resolve => {
+    if (!src) return resolve('');
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k));
+        c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        let out = c.toDataURL('image/png');
+        if (out.length > 300000 && allowJpeg) {
+          const c2 = document.createElement('canvas');
+          c2.width = c.width; c2.height = c.height;
+          const x = c2.getContext('2d');
+          x.fillStyle = '#fff'; x.fillRect(0, 0, c2.width, c2.height);
+          x.drawImage(c, 0, 0);
+          out = c2.toDataURL('image/jpeg', 0.85);
+        }
+        resolve(out.length > 300000 ? '' : out);
+      } catch { resolve(''); }
+    };
+    img.onerror = () => resolve('');
+    img.src = src;
+  });
+}
+
+// Foto KTP/SIM: perkecil & kompres ke JPEG (hemat ruang Firestore, batas 1MB per dokumen)
+export function compressPhoto(file, max = 1000, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('Gagal membaca file.'));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('File bukan gambar yang valid.'));
+      img.onload = () => {
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
 }
 
 export async function toB64(file) {
@@ -97,6 +151,14 @@ export const DEF_SETTINGS = {
   logo: null,
   signature: null,
   stamp: null,
+  // Fitur tambahan (diisi bila fitur dibuka)
+  qris: null,
+  materai: false,
+  graceHours: 1,
+  waReturn: '',
+  waBooking: '',
+  waBill: '',
+  contractTerms: '',
 };
 
 // ─── Terbilang (angka → kata dalam Bahasa Indonesia) ─────────────────────────

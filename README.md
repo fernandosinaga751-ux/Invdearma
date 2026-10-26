@@ -435,3 +435,37 @@ akun lewat Firebase Console.
 ---
 
 © 2025 Dearma Rental Mobil Medan. All rights reserved.
+
+
+---
+
+## Fitur Tambahan Rental (khusus Admin Utama)
+
+Fitur di bawah ini **hanya bisa dipakai Admin Utama**. Akun yang mendaftar hanya bisa **melihat deskripsinya**
+(menu bertanda 🔒). Untuk membukanya, akun menekan tombol **🔓 Ajukan Fitur**; Admin Utama menyetujuinya
+di menu **Pengajuan Fitur** (atau mengatur langsung lewat **Daftar Akun → ✨ Fitur**).
+
+| Fitur | Isi |
+|---|---|
+| 🚗 Armada, Sopir & Pengingat | data mobil/sopir, tarif, pengingat STNK/pajak/KIR/servis |
+| 📅 Booking, Kalender & Sewa Otomatis | kalender per mobil, deteksi bentrok, hitung hari & overtime, WA pengingat (butuh Armada) |
+| 💳 Pembayaran Bertahap, Deposit, QRIS & Materai | riwayat cicilan, kwitansi per pembayaran, deposit/jaminan |
+| 📝 Perjanjian & Serah Terima | checklist kondisi, KM/BBM, TTD di layar, denda → invoice |
+| 🧰 Pengeluaran & Laba per Mobil | catatan biaya & laba per mobil |
+| 📊 Laporan & Piutang | grafik, piutang & tagih WA, ekspor Excel (CSV) |
+| 🪪 Data Customer Lengkap | NIK, foto KTP/SIM, riwayat sewa, tanda bermasalah |
+| 💾 Backup & Ekspor | backup JSON, ekspor CSV |
+
+### WAJIB setelah update ini
+1. **Publikasikan ulang `firestore.rules`** (ganti `admin@email-anda.com` dengan email admin Anda).
+   Aturan baru menegakkan izin fitur **di server**: akun tanpa izin tidak bisa membaca/menulis data armada,
+   booking, sopir, dan pengeluaran, walaupun memanggil Firestore langsung. Tanpa langkah ini, akun biasa
+   tidak bisa mengajukan fitur dan data fitur tidak termuat.
+2. Jalankan `npm install` (ada library baru `html2canvas` & `jspdf` untuk unduh kwitansi PDF).
+
+### Catatan teknis
+- Izin fitur disimpan di `accounts/{uid}.features` (hanya admin yang bisa mengubahnya); pengajuan di koleksi `featureRequests`.
+- Fitur yang datanya tersimpan di dokumen invoice/customer (Pembayaran, Serah Terima, Data Customer Lengkap)
+  dikunci di antarmuka; koleksi terpisah (armada, sopir, booking, pengeluaran) dikunci juga di Firestore Rules.
+- Foto KTP/SIM disimpan terkompresi di dokumen customer dan **tidak** ikut ke link customer.
+- Backup JSON belum punya fitur pemulihan otomatis.

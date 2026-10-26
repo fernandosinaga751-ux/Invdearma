@@ -9,21 +9,60 @@ service cloud.firestore {
         && request.auth.token.email.lower() == 'admin@email-anda.com';
     }
 
+    // Fitur yang dibuka admin untuk sebuah akun (accounts/{uid}.features).
+    // Dipakai agar akun biasa TIDAK bisa membaca/menulis data fitur tambahan
+    // sebelum pengajuannya disetujui — walaupun memanggil Firestore langsung.
+    function hasFeature(uid, f) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && (f in get(/databases/$(database)/documents/accounts/$(uid)).data.get('features', []));
+    }
+    function ownerOrAdmin(uid) {
+      return request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ── Data admin utama (database lama) ───────────────────────────
     match /config/{doc}    { allow read, write: if isAdmin(); }
     match /customers/{doc} { allow read, write: if isAdmin(); }
     match /invoices/{doc}  { allow read, write: if isAdmin(); }
+    // Fitur tambahan: HANYA admin utama
+    match /vehicles/{doc}  { allow read, write: if isAdmin(); }
+    match /drivers/{doc}   { allow read, write: if isAdmin(); }
+    match /bookings/{doc}  { allow read, write: if isAdmin(); }
+    match /expenses/{doc}  { allow read, write: if isAdmin(); }
 
     match /accounts/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create: if request.auth != null && request.auth.uid == uid;
-      allow update, delete: if isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid
+        && !('features' in request.resource.data);          // akun baru tidak boleh memberi fitur ke diri sendiri
+      allow update, delete: if isAdmin();                    // hanya admin yang bisa mengubah status & fitur
     }
 
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    // ── Data per akun ─────────────────────────────────────────────
+    match /users/{uid}/config/{doc}    { allow read, write: if ownerOrAdmin(uid); }
+    match /users/{uid}/customers/{doc} { allow read, write: if ownerOrAdmin(uid); }
+    match /users/{uid}/invoices/{doc}  { allow read, write: if ownerOrAdmin(uid); }
+    // Fitur tambahan: butuh izin dari admin
+    match /users/{uid}/vehicles/{doc}  { allow read, write: if isAdmin() || hasFeature(uid, 'fleet'); }
+    match /users/{uid}/drivers/{doc}   { allow read, write: if isAdmin() || hasFeature(uid, 'fleet'); }
+    match /users/{uid}/bookings/{doc}  { allow read, write: if isAdmin() || hasFeature(uid, 'booking'); }
+    match /users/{uid}/expenses/{doc}  { allow read, write: if isAdmin() || hasFeature(uid, 'expenses'); }
+
+    // ── Pengajuan fitur ───────────────────────────────────────────
+    // Akun hanya boleh MEMBUAT pengajuan berstatus pending atas namanya sendiri
+    // dan membatalkan (hapus) pengajuan pending miliknya. Persetujuan = admin.
+    match /featureRequests/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow read: if request.auth != null
+        && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin()
+        || (request.auth != null && resource.data.uid == request.auth.uid && resource.data.status == 'pending');
     }
 
-    // ── BARU: link invoice untuk customer ──────────────────────────
+    // ── Link invoice untuk customer ───────────────────────────────
     // Customer (tanpa login) hanya boleh MEMBACA satu dokumen lewat token
     // dan MENGUBAH field `proposal` (diskon & pajak). Tidak bisa list.
     match /shares/{token} {

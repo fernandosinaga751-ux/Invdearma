@@ -2,15 +2,33 @@
 import { useState } from 'react';
 import { Card, Input, Btn, Icons } from '../components/UI.jsx';
 import { fmt, uid, todayStr, genInvNo } from '../lib/utils.js';
-import { addInvoice, updateInvoice, syncShare } from '../lib/firebase.js';
+import { addInvoice, updateInvoice, syncShare, updateIn } from '../lib/firebase.js';
+import RentalCard, { EMPTY_RENTAL } from '../components/RentalCard.jsx';
+import { LockedTeaser } from '../components/FeatureGate.jsx';
+import { calcRental, findConflicts, fmtDT } from '../lib/rental.js';
 
-export default function NewInvoice({ invoices, customers, setInvoices, setPage, setViewingId, editingInvoice, setEditingInvoice, settings }) {
+export default function NewInvoice({
+  invoices, customers, setInvoices, setPage, setViewingId, editingInvoice, setEditingInvoice, settings,
+  can = () => false, vehicles = [], drivers = [], bookings = [], setBookings, bookingDraft = null, setBookingDraft,
+}) {
   const today = todayStr();
+  const draft = !editingInvoice ? bookingDraft : null; // booking yang sedang dijadikan invoice
   const [date, setDate]       = useState(editingInvoice?.date || today);
-  const [custQuery, setCustQuery] = useState(editingInvoice?.customerName || '');
+  const draftCust = draft ? (customers.find(c => c.id === draft.customerId) || { id: draft.customerId || '', name: draft.customerName, phone: draft.phone || '', address: '' }) : null;
+  const [custQuery, setCustQuery] = useState(editingInvoice?.customerName || draft?.customerName || '');
   const [selCust, setSelCust] = useState(editingInvoice
-    ? { id: editingInvoice.customerId, name: editingInvoice.customerName, phone: editingInvoice.customerPhone, address: editingInvoice.customerAddress }
-    : null);
+    ? { id: editingInvoice.customerId, name: editingInvoice.customerName, phone: editingInvoice.customerPhone, address: editingInvoice.customerAddress,
+        flagged: customers.find(c => c.id === editingInvoice.customerId)?.flagged, flagReason: customers.find(c => c.id === editingInvoice.customerId)?.flagReason }
+    : draftCust);
+  const [rental, setRental] = useState(() => {
+    if (editingInvoice?.rental) return { ...EMPTY_RENTAL, ...editingInvoice.rental };
+    if (draft) {
+      const v = vehicles.find(x => x.id === draft.vehicleId);
+      return { ...EMPTY_RENTAL, vehicleId: draft.vehicleId, vehicleName: v?.name || draft.vehicleName || '', plate: v?.plate || draft.plate || '',
+        rate: v?.rate || 0, overtimeRate: v?.overtimeRate || 0, pickupAt: draft.pickupAt, returnAt: draft.returnAt, destination: draft.destination || '' };
+    }
+    return { ...EMPTY_RENTAL };
+  });
   const [showDrop, setShowDrop] = useState(false);
   const [items, setItems]     = useState(editingInvoice?.items || [{ id: uid(), description: '', qty: 1, price: 0 }]);
   const [ppnPct, setPpnPct]   = useState(editingInvoice?.ppn || 0);
@@ -33,6 +51,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   const panjarAmt      = Math.min(Number(panjar) || 0, total);
   const sisa           = total - panjarAmt;
   const previewNo = editingInvoice?.invoiceNo || genInvNo(invoices, date);
+  const graceHours = settings?.graceHours ?? 1;
 
   const addItem    = () => setItems([...items, { id: uid(), description: '', qty: 1, price: 0 }]);
   const removeItem = id => items.length > 1 && setItems(items.filter(i => i.id !== id));
@@ -41,6 +60,13 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
   const handleSave = async () => {
     if (!selCust)                            return alert('Pilih customer terlebih dahulu!');
     if (items.some(i => !i.description.trim())) return alert('Keterangan item tidak boleh kosong!');
+    // Cek jadwal bentrok bila ada data sewa
+    const hasRental = can('booking') && rental.vehicleId;
+    if (hasRental) {
+      const cf = findConflicts({ vehicleId: rental.vehicleId, pickupAt: rental.pickupAt, returnAt: rental.returnAt, invoices, bookings,
+        ignoreInvoiceId: editingInvoice?.id, ignoreBookingId: draft?.id });
+      if (cf.length && !confirm('Mobil ini sudah terjadwal pada waktu tersebut (' + cf.map(c => `${c.label}: ${fmtDT(c.start)} – ${fmtDT(c.end)}`).join('; ') + ').\n\nTetap simpan invoice?')) return;
+    }
     setSaving(true);
     try {
       const invNo = editingInvoice?.invoiceNo
@@ -56,6 +82,13 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
         panjar: panjarAmt, sisa,
         notes,
       };
+      if (can('booking')) {
+        if (rental.vehicleId) {
+          const c = calcRental({ pickupAt: rental.pickupAt, returnAt: rental.returnAt, rate: rental.rate, overtimeRate: rental.overtimeRate, graceHours });
+          payload.rental = { ...rental, rate: Number(rental.rate) || 0, overtimeRate: Number(rental.overtimeRate) || 0,
+            days: c.valid ? c.days : 0, overtimeHours: c.overtimeHours || 0, overtimeCharge: c.overtimeCharge || 0 };
+        } else if (editingInvoice?.rental) payload.rental = null; // data sewa dihapus
+      }
 
       if (editingInvoice) {
         await updateInvoice(editingInvoice.id, payload);
@@ -68,6 +101,14 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
         const added = await addInvoice(payload);
         setInvoices([{ ...payload, id: added.id, createdAt: new Date().toISOString() }, ...invoices]);
         setViewingId(added.id);
+        // Booking yang dikonversi → tautkan ke invoice supaya tidak tampil ganda di kalender
+        if (draft) {
+          try {
+            await updateIn('bookings', draft.id, { invoiceId: added.id });
+            setBookings?.(bookings.map(b => b.id === draft.id ? { ...b, invoiceId: added.id } : b));
+          } catch (e) { console.warn('Tautan booking gagal:', e.message); }
+          setBookingDraft?.(null);
+        }
       }
       setPage('invoices');
     } catch (e) {
@@ -109,7 +150,7 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
                     onMouseDown={() => { setSelCust(c); setCustQuery(c.name); setShowDrop(false); }}
                     className="w-full text-left px-4 py-3 hover:bg-blue-50 transition border-b border-slate-50 last:border-0"
                   >
-                    <div className="font-bold text-sm text-[#0f2544]">{c.name}</div>
+                    <div className="font-bold text-sm text-[#0f2544]">{c.flagged ? '⚠️ ' : ''}{c.name}</div>
                     {c.phone && <div className="text-xs text-slate-400">{c.phone}</div>}
                   </button>
                 )) : (
@@ -121,6 +162,11 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
               </div>
             )}
           </div>
+          {selCust?.flagged && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+              ⚠️ <strong>Customer ditandai bermasalah</strong>{selCust.flagReason ? `: ${selCust.flagReason}` : '.'}
+            </div>
+          )}
           {selCust && (
             <div className="mt-3 p-3 bg-blue-50 rounded-xl text-sm">
               <div className="font-bold text-[#0f2544]">{selCust.name}</div>
@@ -195,6 +241,12 @@ export default function NewInvoice({ invoices, customers, setInvoices, setPage, 
           </div>
         </Card>
       </div>
+
+      {/* Detail sewa (fitur Booking) — terkunci untuk akun tanpa izin */}
+      {can('booking')
+        ? <RentalCard rental={rental} setRental={setRental} vehicles={vehicles} drivers={drivers} invoices={invoices} bookings={bookings}
+            editingInvoiceId={editingInvoice?.id} ignoreBookingId={draft?.id} graceHours={graceHours} items={items} setItems={setItems} />
+        : <LockedTeaser featureId="booking" setPage={setPage} />}
 
       {/* Items */}
       <Card className="p-5">

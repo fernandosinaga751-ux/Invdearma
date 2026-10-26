@@ -1,8 +1,12 @@
 // src/pages/Invoices.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Input, Btn, Badge, Icons } from '../components/UI.jsx';
-import { fmt, formatDateID, todayStr, taxLabel, taxSign, calcTotals, buildInvoiceWaText, normalizeWaNumber } from '../lib/utils.js';
+import { uid, fmt, formatDateID, todayStr, taxLabel, taxSign, calcTotals, buildInvoiceWaText, normalizeWaNumber } from '../lib/utils.js';
 import { doPrint } from '../lib/print.js';
+import PaymentsPanel from '../components/PaymentsPanel.jsx';
+import HandoverModal from '../components/HandoverModal.jsx';
+import { LockedTeaser } from '../components/FeatureGate.jsx';
+import { paidTotal, outstanding } from '../lib/rental.js';
 import { deleteInvoice, updateInvoice, ensureShare, syncShare, deleteShare, setProposalStatus, closeShare, shareUrl } from '../lib/firebase.js';
 
 // ─── Modal "Sudah Bayar" → Konfirmasi + Cetak Kwitansi ───────────────────────
@@ -90,9 +94,12 @@ function BayarModal({ invoice, settings, onConfirm, onClose }) {
 }
 
 // ─── Modal Kirim Teks Invoice ke WhatsApp ────────────────────────────────────
-function WaModal({ invoice, settings, customers = [], share, onClose }) {
-  const token   = invoice.shareToken || share?.token;
-  const hasLink = !!token && !invoice.shareClosed;
+function WaModal({ invoice, settings, customers = [], share, onShared, onClose }) {
+  const existing = (invoice.shareToken || share?.token) && !invoice.shareClosed ? (invoice.shareToken || share?.token) : '';
+  const [token, setToken]         = useState(existing);
+  const [linkState, setLinkState] = useState(existing ? 'ok' : 'making'); // ok | making | fail
+  const startedRef = useRef(false);
+  const editedRef  = useRef(false);
   const withPhone = customers.filter(c => normalizeWaNumber(c.phone));
   const owner = customers.find(c => c.id === invoice.customerId);
 
@@ -100,12 +107,30 @@ function WaModal({ invoice, settings, customers = [], share, onClose }) {
   const defaultSel = normalizeWaNumber(owner?.phone || invoice.customerPhone) ? (owner?.id || '__inv') : '__manual';
   const [sel, setSel]       = useState(defaultSel);
   const [manual, setManual] = useState('');
-  const [useLink, setUseLink] = useState(hasLink);
-  const [text, setText]     = useState(() => buildInvoiceWaText(invoice, settings, hasLink ? shareUrl(token) : ''));
+  const [useLink, setUseLink] = useState(true);
+  const [text, setText]     = useState(() => buildInvoiceWaText(invoice, settings, existing ? shareUrl(existing) : ''));
+
+  // Belum punya link aktif → buat otomatis supaya customer bisa buka invoice & unduh kwitansi
+  useEffect(() => {
+    if (existing || startedRef.current) return;
+    startedRef.current = true;
+    (async () => {
+      try {
+        const t = await ensureShare(invoice, settings, { forceNew: !!invoice.shareClosed });
+        setToken(t); setLinkState('ok'); onShared?.(t);
+        setText(prev => editedRef.current
+          ? prev + `\n\n${shareUrl(t)}`
+          : buildInvoiceWaText(invoice, settings, shareUrl(t)));
+      } catch (e) {
+        console.error(e); setLinkState('fail'); setUseLink(false);
+      }
+    })();
+  }, []);
 
   const toggleLink = v => {
     setUseLink(v);
-    setText(buildInvoiceWaText(invoice, settings, v && hasLink ? shareUrl(token) : ''));
+    setText(buildInvoiceWaText(invoice, settings, v && token ? shareUrl(token) : ''));
+    editedRef.current = false;
   };
 
   const number = sel === '__manual' ? normalizeWaNumber(manual)
@@ -113,7 +138,7 @@ function WaModal({ invoice, settings, customers = [], share, onClose }) {
     : sel === '__pick' ? ''
     : normalizeWaNumber(customers.find(c => c.id === sel)?.phone);
 
-  const canSend = sel === '__pick' || !!number;
+  const canSend = linkState !== 'making' && (sel === '__pick' || !!number);
 
   const send = () => {
     const url = `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
@@ -161,13 +186,26 @@ function WaModal({ invoice, settings, customers = [], share, onClose }) {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Isi pesan (bisa diedit)</label>
-              {hasLink && (
+              {linkState === 'making' && <span className="text-xs text-slate-400">⏳ Membuat link...</span>}
+              {linkState === 'ok' && (
                 <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
                   <input type="checkbox" checked={useLink} onChange={e => toggleLink(e.target.checked)} /> sertakan link
                 </label>
               )}
             </div>
-            <textarea value={text} onChange={e => setText(e.target.value)} rows={12}
+            {linkState === 'fail' && (
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-2">
+                Link gagal dibuat, pesan dikirim tanpa link. Pastikan Firestore Rules sudah diperbarui (lihat README).
+              </p>
+            )}
+            {linkState === 'ok' && useLink && (
+              <p className="text-xs text-slate-400 mb-2">
+                {invoice.paidDate
+                  ? 'Customer bisa membuka invoice dan mengunduh kwitansi (PDF) dari link ini.'
+                  : 'Kwitansi tampil dan bisa diunduh customer di link ini setelah invoice ditandai lunas.'}
+              </p>
+            )}
+            <textarea value={text} onChange={e => { editedRef.current = true; setText(e.target.value); }} rows={12}
               className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544]" />
           </div>
         </div>
@@ -256,7 +294,7 @@ function SharePanel({ invoice, share, settings, onShared, onApply, onReject }) {
 }
 
 // ─── Detail / View Invoice ────────────────────────────────────────────────────
-function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBayar, onWa, onShared, onApply, onReject }) {
+function ViewInvoice({ invoice, share, settings, can = () => false, setPage, onBack, onEdit, onDelete, onBayar, onWa, onSavePatch, onHandover, onShared, onApply, onReject }) {
   if (!invoice) return (
     <div className="p-6">
       <p className="text-slate-400 mb-4">Invoice tidak ditemukan.</p>
@@ -265,6 +303,8 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
   );
 
   const isPaid = !!invoice.paidDate;
+  const hasPay = (invoice.payments || []).length > 0;   // dibayar bertahap → kwitansi per pembayaran
+  const partial = hasPay && !isPaid && paidTotal(invoice) > 0;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-3xl">
@@ -277,17 +317,22 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
             ✅ LUNAS — {formatDateID(invoice.paidDate)}
           </span>
         )}
+        {partial && (
+          <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 text-xs font-black px-3 py-1.5 rounded-full">
+            💵 Dibayar sebagian — sisa Rp {fmt(outstanding(invoice))}
+          </span>
+        )}
         <Btn variant="outline" onClick={() => onEdit(invoice)}>{Icons.edit} Edit</Btn>
         <Btn variant="green" onClick={() => onWa(invoice)}>💬 Kirim WA</Btn>
         <Btn variant="primary" onClick={() => doPrint(invoice, 'invoice', settings)}>
           {Icons.print} Cetak Invoice
         </Btn>
-        {isPaid && (
+        {isPaid && !hasPay && (
           <Btn variant="gold" onClick={() => doPrint(invoice, 'kwitansi', settings)}>
             {Icons.print} Cetak Kwitansi
           </Btn>
         )}
-        {!isPaid && (
+        {!isPaid && !hasPay && (
           <Btn variant="green" onClick={() => onBayar(invoice)}>
             💰 Sudah Bayar
           </Btn>
@@ -296,6 +341,26 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
       </div>
 
       <SharePanel invoice={invoice} share={share} settings={settings} onShared={onShared} onApply={onApply} onReject={onReject} />
+
+      {/* Fitur tambahan: pembayaran bertahap & deposit */}
+      {can('payments')
+        ? <PaymentsPanel invoice={invoice} settings={settings} onSave={patch => onSavePatch(invoice, patch)} />
+        : <LockedTeaser featureId="payments" setPage={setPage} />}
+
+      {/* Fitur tambahan: perjanjian & serah terima */}
+      {can('handover') ? (
+        <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="font-bold text-[#0f2544]">📝 Perjanjian & Serah Terima</div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              {invoice.handover
+                ? `Terisi${invoice.handover.out?.km ? ` · KM awal ${fmt(invoice.handover.out.km)}` : ''}${invoice.handover.back?.km ? ` · KM akhir ${fmt(invoice.handover.back.km)}` : ''}${invoice.handover.finesAddedAt ? ' · denda sudah masuk invoice' : ''}`
+                : 'Checklist kondisi mobil, KM & BBM, tanda tangan di layar, dan surat perjanjian.'}
+            </div>
+          </div>
+          <Btn variant="outline" onClick={() => onHandover(invoice)}>{invoice.handover ? 'Buka / Edit' : 'Isi Serah Terima'}</Btn>
+        </Card>
+      ) : <LockedTeaser featureId="handover" setPage={setPage} />}
 
       {/* Invoice card */}
       <Card>
@@ -394,7 +459,7 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
       </Card>
 
       {/* "Sudah Bayar" CTA jika belum lunas */}
-      {!isPaid && (
+      {!isPaid && !hasPay && (
         <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <div className="font-black text-emerald-700 text-base">Sudah menerima pembayaran?</div>
@@ -422,13 +487,22 @@ function ViewInvoice({ invoice, share, settings, onBack, onEdit, onDelete, onBay
 }
 
 // ─── Invoices List ────────────────────────────────────────────────────────────
-export default function Invoices({ invoices, setInvoices, customers = [], settings, setPage, viewingId, setViewingId, setEditingInvoice, shares = {}, refreshShares = () => {} }) {
+export default function Invoices({ invoices, setInvoices, customers = [], settings, setPage, viewingId, setViewingId, setEditingInvoice, shares = {}, refreshShares = () => {}, can = () => false }) {
   const [search, setSearch]     = useState('');
   const [bayarInv, setBayarInv] = useState(null); // invoice yg sedang dikonfirmasi bayar
   const [waInv, setWaInv]       = useState(null); // invoice yg akan dikirim lewat WhatsApp
+  const [hoInv, setHoInv]       = useState(null); // invoice yg sedang diisi serah terimanya
 
   // Cek usulan customer terbaru setiap halaman ini dibuka
   useEffect(() => { refreshShares(); }, []);
+
+  // Saat detail invoice dibuka, sinkronkan link yang sudah ada (status lunas, TTD, stempel)
+  // agar kwitansi di sisi customer selalu terbaru.
+  useEffect(() => {
+    if (!viewingId) return;
+    const inv = invoices.find(i => i.id === viewingId);
+    if (inv?.shareToken && !inv.shareClosed) syncShare(inv, settings);
+  }, [viewingId]);
 
   const patchInvoice = (id, patch) => setInvoices(invoices.map(i => i.id === id ? { ...i, ...patch } : i));
 
@@ -463,6 +537,33 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
 
   const handleEdit = inv => { setEditingInvoice(inv); setPage('new-invoice'); };
 
+  // Simpan perubahan sebagian (pembayaran, deposit, serah terima) + sinkronkan link customer
+  const savePatch = async (inv, patch) => {
+    await updateInvoice(inv.id, patch);
+    setInvoices(list => list.map(i => i.id === inv.id ? { ...i, ...patch } : i));
+    syncShare({ ...inv, ...patch }, settings);
+  };
+
+  // Denda dari serah terima → masuk ke rincian invoice, total dihitung ulang
+  const addFinesToInvoice = async (inv, fines, handoverData) => {
+    const items = [...(inv.items || []), ...fines.map(f => ({ id: uid(), description: f.desc, qty: 1, price: f.amount }))];
+    const subtotal = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
+    const diskon = Math.min(inv.diskon || 0, subtotal);
+    const after = subtotal - diskon;
+    const ppnAmount = inv.ppnManual ? Math.min(inv.ppnAmount || 0, after) : Math.round(after * (inv.ppn || 0) / 100);
+    const total = after - ppnAmount;
+    const panjar = Math.min(inv.panjar || 0, total);
+    const patch = { items, subtotal, diskon, ppnAmount, total, panjar, sisa: total - panjar, handover: handoverData };
+    // Invoice yang sebelumnya lunas jadi punya sisa lagi → pertahankan pembayaran lama sebagai riwayat
+    if (inv.paidDate) {
+      if (!(inv.payments || []).length) {
+        patch.payments = [{ id: uid(), date: inv.paidDate, amount: Math.max(0, (inv.total || 0) - (inv.panjar || 0)), method: 'Sebelumnya', note: 'Pembayaran sebelum denda', createdAt: new Date().toISOString() }];
+      }
+      patch.paidDate = '';
+    }
+    await savePatch(inv, patch);
+  };
+
   // Konfirmasi bayar → update invoice, cetak kwitansi
   const handleConfirmBayar = async (paidDate) => {
     const inv = { ...bayarInv, paidDate };
@@ -487,6 +588,7 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
       <>
         <ViewInvoice
           invoice={inv} settings={settings} share={inv ? shares[inv.id] : null}
+          can={can} setPage={setPage} onSavePatch={savePatch} onHandover={i => setHoInv(i)}
           onShared={t => handleShared(inv.id, t)} onApply={handleApply} onReject={handleReject}
           onBack={() => setViewingId(null)}
           onEdit={handleEdit}
@@ -495,8 +597,14 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
           onWa={inv => setWaInv(inv)}
         />
         {waInv && (
-          <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onClose={() => setWaInv(null)} />
+          <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onShared={t => handleShared(waInv.id, t)} onClose={() => setWaInv(null)} />
         )}
+        {hoInv && (() => {
+          const cur = invoices.find(i => i.id === hoInv.id) || hoInv;
+          return <HandoverModal invoice={cur} settings={settings} onClose={() => setHoInv(null)}
+            onSave={data => savePatch(cur, { handover: data })}
+            onAddFines={(fines, data) => addFinesToInvoice(cur, fines, data)} />;
+        })()}
         {bayarInv && (
           <BayarModal
             invoice={bayarInv}
@@ -582,7 +690,9 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
                         <td className="px-5 py-3 text-center">
                           {isPaid
                             ? <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">✅ Lunas</span>
-                            : <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">⏳ Belum</span>
+                            : (inv.payments || []).length > 0 && paidTotal(inv) > 0
+                              ? <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full">💵 Sebagian</span>
+                              : <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">⏳ Belum</span>
                           }
                         </td>
                         <td className="px-5 py-3">
@@ -591,7 +701,10 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
                               className="p-1.5 text-slate-400 hover:text-[#0f2544] hover:bg-slate-100 rounded-lg transition">{Icons.eye}</button>
                             <button onClick={() => doPrint(inv, 'invoice', settings)} title="Cetak Invoice"
                               className="p-1.5 text-slate-400 hover:text-[#0f2544] hover:bg-slate-100 rounded-lg transition">{Icons.print}</button>
-                            {isPaid
+                            {(inv.payments || []).length > 0
+                              ? <button onClick={() => setViewingId(inv.id)} title="Lihat pembayaran & kwitansi"
+                                  className="px-2 py-1 text-[10px] font-black rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition">BAYAR</button>
+                              : isPaid
                               ? <button onClick={() => doPrint(inv, 'kwitansi', settings)} title="Cetak Kwitansi"
                                   className="px-2 py-1 text-[10px] font-black rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">KWIT</button>
                               : <button onClick={() => setBayarInv(inv)} title="Sudah Bayar"
@@ -616,7 +729,7 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
       </div>
 
       {waInv && (
-        <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onClose={() => setWaInv(null)} />
+        <WaModal invoice={waInv} settings={settings} customers={customers} share={shares[waInv.id]} onShared={t => handleShared(waInv.id, t)} onClose={() => setWaInv(null)} />
       )}
 
       {/* Modal bayar (dari list) */}

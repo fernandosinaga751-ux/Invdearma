@@ -1,7 +1,8 @@
 // src/pages/Accounts.jsx
 import { useState, useEffect } from 'react';
-import { Card, Btn, Badge, Icons } from '../components/UI.jsx';
-import { getAllAccounts, approveAccount, setAccountStatus, deleteAccountCompletely, removeAccountEntry } from '../lib/firebase.js';
+import { Card, Btn, Badge, Icons, Modal } from '../components/UI.jsx';
+import { FEATURES } from '../lib/features.js';
+import { getAllAccounts, approveAccount, setAccountStatus, deleteAccountCompletely, removeAccountEntry, setAccountFeatures } from '../lib/firebase.js';
 
 function formatDate(iso) {
   if (!iso) return '-';
@@ -26,6 +27,8 @@ export default function Accounts() {
   const [loading, setLoading]   = useState(true);
   const [busyId, setBusyId]     = useState(null);
   const [err, setErr]           = useState('');
+  const [featAcc, setFeatAcc]   = useState(null);
+  const [featSel, setFeatSel]   = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -63,6 +66,18 @@ export default function Accounts() {
     } catch (e) {
       alert('Gagal mengubah status akun: ' + e.message);
     }
+    setBusyId(null);
+  };
+
+  const openFeatures = acc => { setFeatAcc(acc); setFeatSel(acc.features || []); };
+  const toggleFeat = id => setFeatSel(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]);
+  const saveFeatures = async () => {
+    setBusyId(featAcc.id);
+    try {
+      const saved = await setAccountFeatures(featAcc.id, featSel);
+      setAccounts(list => list.map(a => a.id === featAcc.id ? { ...a, features: saved } : a));
+      setFeatAcc(null);
+    } catch (e) { alert('Gagal menyimpan fitur: ' + e.message); }
     setBusyId(null);
   };
 
@@ -151,6 +166,7 @@ export default function Accounts() {
                   <th className="px-5 py-3 font-bold">Email</th>
                   <th className="px-5 py-3 font-bold">Daftar Sejak</th>
                   <th className="px-5 py-3 font-bold">Status</th>
+                  <th className="px-5 py-3 font-bold">Fitur</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
@@ -161,8 +177,16 @@ export default function Accounts() {
                     <td className="px-5 py-3 text-slate-600">{acc.email}</td>
                     <td className="px-5 py-3 text-slate-500 text-xs">{formatDate(acc.createdAt)}</td>
                     <td className="px-5 py-3"><StatusBadge status={acc.status} dataWiped={acc.dataWiped} /></td>
+                    <td className="px-5 py-3 text-xs text-slate-500">
+                      {(acc.features || []).length > 0 ? `${acc.features.length} fitur` : <span className="text-slate-300">terkunci</span>}
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                        {!acc.dataWiped && acc.status !== 'pending' && (
+                          <Btn variant="outline" className="text-xs px-3 py-1.5" disabled={busyId === acc.id} onClick={() => openFeatures(acc)}>
+                            ✨ Fitur
+                          </Btn>
+                        )}
                         {acc.status === 'pending' && (
                           <Btn
                             variant="green"
@@ -211,6 +235,32 @@ export default function Accounts() {
           </div>
         )}
       </Card>
+      {featAcc && (
+        <Modal title="Atur Fitur Akun" subtitle={featAcc.email} onClose={() => setFeatAcc(null)}
+          footer={<>
+            <Btn onClick={saveFeatures} disabled={busyId === featAcc.id} className="flex-1 justify-center py-3">💾 Simpan</Btn>
+            <Btn variant="ghost" onClick={() => setFeatAcc(null)}>Batal</Btn>
+          </>}>
+          <p className="text-xs text-slate-400 mb-3">Centang fitur yang boleh dipakai akun ini. Fitur yang tidak dicentang tetap terkunci (hanya bisa dilihat).</p>
+          <div className="space-y-2">
+            {FEATURES.map(f => {
+              const needs = (f.requires || []).filter(r => !featSel.includes(r));
+              return (
+                <label key={f.id} className="flex items-start gap-2.5 text-sm cursor-pointer p-2.5 rounded-xl hover:bg-slate-50">
+                  <input type="checkbox" className="mt-1" checked={featSel.includes(f.id)} onChange={() => toggleFeat(f.id)} />
+                  <span>
+                    <strong className="text-[#0f2544]">{f.emoji} {f.name}</strong>
+                    <span className="block text-xs text-slate-400">{f.short}</span>
+                    {featSel.includes(f.id) && needs.length > 0 && (
+                      <span className="block text-xs text-amber-600">Otomatis ikut membuka: {needs.map(n => FEATURES.find(x => x.id === n)?.name).join(', ')}</span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

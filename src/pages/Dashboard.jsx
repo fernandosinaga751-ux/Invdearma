@@ -1,8 +1,9 @@
 // src/pages/Dashboard.jsx
 import { Card, Btn } from '../components/UI.jsx';
 import { fmt, formatDateID, MONTHS_ID, todayStr } from '../lib/utils.js';
+import { docReminders, rentalEntries, fmtDT } from '../lib/rental.js';
 
-export default function Dashboard({ invoices, customers, setPage, setViewingId, pendingCount = 0 }) {
+export default function Dashboard({ invoices, customers, setPage, setViewingId, pendingCount = 0, can = () => false, vehicles = [], bookings = [] }) {
   const now = new Date();
   const thisM = now.getMonth(), thisY = now.getFullYear();
   const mInvs = invoices.filter(i => {
@@ -14,6 +15,15 @@ export default function Dashboard({ invoices, customers, setPage, setViewingId, 
   const recent  = [...invoices]
     .sort((a, b) => b.date?.localeCompare(a.date) || b.createdAt?.localeCompare(a.createdAt))
     .slice(0, 8);
+
+  // Ringkasan operasional rental (hanya bila fitur Armada/Booking terbuka)
+  const reminders = can('fleet') ? docReminders(vehicles) : [];
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()), dayEnd = new Date(dayStart.getTime() + 864e5 - 1);
+  const todays = can('booking') ? rentalEntries(invoices, bookings).filter(e => {
+    const a = new Date(e.start), b = new Date(e.end);
+    return (a >= dayStart && a <= dayEnd) || (b >= dayStart && b <= dayEnd);
+  }) : [];
+  const vName = id => vehicles.find(v => v.id === id)?.name || 'Mobil';
 
   const stats = [
     { label: 'Total Invoice',     val: invoices.length,          sub: 'Semua waktu',        color: '#0f2544', icon: '📋' },
@@ -43,6 +53,42 @@ export default function Dashboard({ invoices, customers, setPage, setViewingId, 
           </div>
           <span className="text-amber-700 font-black">→</span>
         </button>
+      )}
+
+      {(todays.length > 0 || reminders.length > 0) && (
+        <div className="grid lg:grid-cols-2 gap-4">
+          {todays.length > 0 && (
+            <Card className="p-4">
+              <div className="font-black text-[#0f2544] text-sm mb-2">📅 Hari Ini — Ambil & Kembali</div>
+              <div className="space-y-1.5">
+                {todays.slice(0, 6).map(e => {
+                  const pick = new Date(e.start) >= dayStart && new Date(e.start) <= dayEnd;
+                  return (
+                    <div key={e.key} className="text-xs flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                      <span><strong>{pick ? '⬆️ Ambil' : '⬇️ Kembali'}</strong> · {vName(e.vehicleId)} — {e.label}</span>
+                      <span className="text-slate-400 whitespace-nowrap">{fmtDT(pick ? e.start : e.end).slice(-5)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={() => setPage('bookings')} className="text-xs font-bold text-[#0f2544] hover:underline mt-2">Buka kalender →</button>
+            </Card>
+          )}
+          {reminders.length > 0 && (
+            <Card className="p-4 border-2 border-amber-200 bg-amber-50/40">
+              <div className="font-black text-amber-800 text-sm mb-2">⏰ Pengingat Dokumen & Servis ({reminders.length})</div>
+              <div className="space-y-1.5">
+                {reminders.slice(0, 5).map((r, i) => (
+                  <div key={i} className={`text-xs rounded-lg px-3 py-2 flex items-center justify-between gap-2 ${r.level === 'expired' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                    <span><strong>{r.name}</strong> — {r.label}</span>
+                    <span className="font-black whitespace-nowrap">{r.date ? (r.days < 0 ? `lewat ${-r.days} hr` : `${r.days} hr lagi`) : 'segera'}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setPage('fleet')} className="text-xs font-bold text-[#0f2544] hover:underline mt-2">Buka armada →</button>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Stats */}

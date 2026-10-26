@@ -1,5 +1,6 @@
 // src/lib/print.js
 import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel, taxSign } from './utils.js';
+import { paidTotal, outstanding, fmtDT, DEFAULT_TERMS, HANDOVER_CHECKS } from './rental.js';
 
 // ════════════════════════════════════════════════════════════════
 // INVOICE (dengan Due Date)
@@ -103,6 +104,15 @@ function buildInvoiceHTML(invoice, settings) {
       </div>
     </div>
 
+    ${invoice.rental?.vehicleId ? `
+    <div style="background:#f0f6ff;border:1px solid #cfdcf5;border-radius:10px;padding:9px 13px;margin-bottom:14px;font-size:11px;display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;">
+      <div><span style="color:#777;">🚗 Kendaraan:</span> <strong>${invoice.rental.vehicleName}${invoice.rental.plate ? ` (${invoice.rental.plate})` : ''}</strong></div>
+      <div><span style="color:#777;">Durasi:</span> <strong>${invoice.rental.days || '-'} hari</strong>${invoice.rental.withDriver ? ' · dengan sopir' + (invoice.rental.driverName ? ` (${invoice.rental.driverName})` : '') : ''}</div>
+      <div><span style="color:#777;">Ambil:</span> <strong>${fmtDT(invoice.rental.pickupAt)}</strong></div>
+      <div><span style="color:#777;">Kembali:</span> <strong>${fmtDT(invoice.rental.returnAt)}</strong></div>
+      ${invoice.rental.destination ? `<div style="grid-column:1/3;"><span style="color:#777;">Tujuan:</span> <strong>${invoice.rental.destination}</strong></div>` : ''}
+    </div>` : ''}
+
     <table>
       <thead><tr>
         <th style="width:34px;">No</th>
@@ -126,10 +136,13 @@ function buildInvoiceHTML(invoice, settings) {
       ${invoice.diskon > 0 ? `<div class="t-row" style="color:#dc2626;"><span>🏷️ Diskon</span><span>- Rp ${fmt(invoice.diskon)}</span></div>` : ''}
       ${invoice.ppnAmount > 0 ? `<div class="t-row"><span>${taxLabel(invoice)}</span><span>${taxSign(invoice)}Rp ${fmt(invoice.ppnAmount)}</span></div>` : ''}
       <div class="t-row t-grand"><span>TOTAL</span><span>Rp ${fmt(invoice.total)}</span></div>
-      ${invoice.panjar > 0 ? `
+      ${invoice.payments?.length ? `
+      <div class="t-row" style="color:#d97706;font-weight:700;"><span>💰 Sudah Dibayar</span><span>- Rp ${fmt(paidTotal(invoice))}</span></div>
+      <div class="t-row" style="border-top:2px solid #059669;color:#059669;font-size:14px;font-weight:800;padding-top:7px;"><span>${outstanding(invoice) > 0 ? 'SISA TAGIHAN' : 'LUNAS'}</span><span>Rp ${fmt(outstanding(invoice))}</span></div>
+      ` : (invoice.panjar > 0 ? `
       <div class="t-row" style="color:#d97706;font-weight:700;"><span>💰 Panjar / DP</span><span>- Rp ${fmt(invoice.panjar)}</span></div>
       <div class="t-row" style="border-top:2px solid #059669;color:#059669;font-size:14px;font-weight:800;padding-top:7px;"><span>SISA BAYAR</span><span>Rp ${fmt(invoice.sisa)}</span></div>
-      ` : ''}
+      ` : '')}
     </div></div>
 
     ${invoice.notes ? `<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:11px;"><strong style="color:#b45309;">📝 Catatan:</strong> ${invoice.notes}</div>` : ''}
@@ -143,6 +156,7 @@ function buildInvoiceHTML(invoice, settings) {
           ${settings.bankAccount ? `No. Rek : <strong>${settings.bankAccount}</strong><br>` : ''}
           ${settings.ownerName   ? `A/N &nbsp;&nbsp;&nbsp;&nbsp;: ${settings.ownerName}` : ''}
         </p>` : ''}
+        ${settings.qris ? `<div style="margin-top:8px;"><div style="font-size:9px;font-weight:800;color:#0f2544;margin-bottom:3px;letter-spacing:1px;">SCAN QRIS</div><img src="${settings.qris}" alt="QRIS" style="width:92px;height:92px;object-fit:contain;border:1px solid #ddd;border-radius:6px;"></div>` : ''}
       </div>
       <div class="sig-box"><div class="sig-inner">
         <div class="sig-from">Hormat Kami,</div>
@@ -163,10 +177,10 @@ function buildInvoiceHTML(invoice, settings) {
 // ════════════════════════════════════════════════════════════════
 // KWITANSI (Tanda Terima Pembayaran)
 // ════════════════════════════════════════════════════════════════
-function buildKwitansiHTML(invoice, settings) {
+export function buildKwitansiHTML(invoice, settings, { autoPrint = true } = {}) {
   const co = settings.companyName || 'Dearma Rental Mobil Medan';
   const paidDate = invoice.paidDate || invoice.date;
-  const nominal = invoice.panjar > 0 ? (invoice.sisa || invoice.total) : invoice.total;
+  const nominal = invoice.kwNominal != null ? invoice.kwNominal : (invoice.panjar > 0 ? (invoice.sisa || invoice.total) : invoice.total);
   const terbilangStr = terbilang(nominal);
   // Estimasi jumlah baris item (deskripsi panjang = >1 baris). Banyak baris → kertas A4 portrait
   // yang tinggi halamannya mengikuti isi; sedikit baris → A5 landscape seperti biasa.
@@ -241,7 +255,7 @@ function buildKwitansiHTML(invoice, settings) {
   }
 </style></head>
 <body><div class="page">
-  <div class="wm-lunas">LUNAS</div>
+  <div class="wm-lunas">${invoice.kwMark || 'LUNAS'}</div>
   <div class="content">
     <div class="header">
       <div class="logo-box">
@@ -313,6 +327,12 @@ function buildKwitansiHTML(invoice, settings) {
         <span class="kw-sep">:</span>
         <span class="kw-value" style="color:#d97706;">Rp ${fmt(invoice.panjar)} (sudah dibayar)</span>
       </div>` : ''}
+      ${invoice.kwNote ? `
+      <div class="kw-row">
+        <span class="kw-label">Keterangan</span>
+        <span class="kw-sep">:</span>
+        <span class="kw-value" style="font-size:10.5px;color:#444;">${invoice.kwNote}</span>
+      </div>` : ''}
     </div>
 
     <div class="footer">
@@ -324,8 +344,9 @@ function buildKwitansiHTML(invoice, settings) {
           ${settings.ownerName   ? `A/N &nbsp;&nbsp;&nbsp;&nbsp;: ${settings.ownerName}` : ''}
         </p>` : ''}
         <div style="margin-top:10px;">
-          <span class="lunas-badge">✅ LUNAS — Bukti Pembayaran Sah</span>
+          <span class="lunas-badge">✅ ${invoice.kwBadge || 'LUNAS — Bukti Pembayaran Sah'}</span>
         </div>
+        ${settings.materai ? `<div style="margin-top:10px;width:78px;height:46px;border:1px dashed #9aa3b5;border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8.5px;color:#9aa3b5;line-height:1.3;">Tempel<br>Materai</div>` : ''}
       </div>
       <div class="sig-box"><div class="sig-inner">
         <div class="tanggal-box">Medan, ${formatDateID(paidDate)}</div>
@@ -340,7 +361,7 @@ function buildKwitansiHTML(invoice, settings) {
     </div>
   </div>
 </div>
-<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+${autoPrint ? '<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>' : ''}
 </body></html>`;
 }
 
@@ -1003,4 +1024,105 @@ export function buildSingleCardPreviewHTML(data, side, templateId = 'navy-road')
 <body>
   <div class="cn-card ${tplClass} cn-${side}">${side === 'front' ? tpl.front(data) : tpl.back(data)}</div>
 </body></html>`;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// PERJANJIAN SEWA & BERITA ACARA SERAH TERIMA
+// ════════════════════════════════════════════════════════════════
+export function buildHandoverHTML(invoice, settings) {
+  const co = settings.companyName || 'Dearma Rental Mobil Medan';
+  const h = invoice.handover || {};
+  const r = invoice.rental || {};
+  const out = h.out || {}, back = h.back || {};
+  const veh = h.vehicleName || r.vehicleName || '-';
+  const plate = h.plate || r.plate || '-';
+  const terms = (settings.contractTerms || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const clauses = terms.length ? terms : DEFAULT_TERMS;
+  const checkRows = (side) => HANDOVER_CHECKS.map(c => `<tr><td>${c}</td><td>${(side.checks || {})[c] || '-'}</td></tr>`).join('');
+  const dep = invoice.deposit;
+  const sig = (img, label) => `<div class="sg"><div class="sg-img">${img ? `<img src="${img}">` : ''}</div><div class="sg-line"></div><div class="sg-lbl">${label}</div></div>`;
+  const fines = (back.fines || []).filter(f => f.desc);
+
+  return `<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><title>Serah Terima ${fileNameSafe(invoice.customerName)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:210mm;}
+  body{font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#1a1a2e;font-size:11px;line-height:1.5;}
+  .page{width:210mm;padding:13mm 15mm;}
+  .hd{display:flex;align-items:center;gap:12px;border-bottom:3px solid #0f2544;padding-bottom:10px;margin-bottom:12px;}
+  .hd img{width:56px;height:56px;object-fit:contain;}
+  .co{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#0f2544;}
+  .sub{color:#666;font-size:10px;}
+  h1{font-family:'Playfair Display',serif;text-align:center;font-size:15px;color:#0f2544;letter-spacing:1px;margin:4px 0 2px;}
+  .no{text-align:center;font-size:10px;color:#777;font-family:monospace;margin-bottom:10px;}
+  h3{font-size:11px;color:#0f2544;border-left:4px solid #d4a017;padding-left:7px;margin:11px 0 5px;text-transform:uppercase;letter-spacing:.5px;}
+  table{width:100%;border-collapse:collapse;}
+  td,th{border:1px solid #d6dbe8;padding:3.5px 7px;vertical-align:top;text-align:left;font-size:10.5px;}
+  th{background:#eef2fb;color:#0f2544;font-size:10px;}
+  .kv td:first-child{width:30%;background:#f7f9fd;font-weight:600;}
+  ol{padding-left:16px;} ol li{margin-bottom:2.5px;text-align:justify;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .sgs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px;text-align:center;}
+  .sg-img{height:62px;display:flex;align-items:flex-end;justify-content:center;} .sg-img img{max-height:60px;max-width:100%;}
+  .sg-line{border-bottom:1px solid #333;margin:2px 8px;} .sg-lbl{font-size:9.5px;color:#444;margin-top:2px;}
+  .note{background:#fffbeb;border:1px solid #fbbf24;border-radius:6px;padding:5px 9px;font-size:10px;margin-top:5px;}
+  .pb{page-break-before:always;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}@page{size:A4 portrait;margin:0;}}
+</style></head><body><div class="page">
+  <div class="hd">
+    ${settings.logo ? `<img src="${settings.logo}">` : ''}
+    <div><div class="co">${co}</div><div class="sub">${[settings.address, settings.phone ? '📞 ' + settings.phone : ''].filter(Boolean).join(' · ')}</div></div>
+  </div>
+  <h1>SURAT PERJANJIAN SEWA KENDARAAN<br>& BERITA ACARA SERAH TERIMA</h1>
+  <div class="no">Ref. Invoice ${invoice.invoiceNo}</div>
+
+  <h3>Para Pihak</h3>
+  <table class="kv">
+    <tr><td>Pihak Pertama (Pemilik)</td><td>${settings.ownerName || co} — ${co}</td></tr>
+    <tr><td>Pihak Kedua (Penyewa)</td><td><strong>${invoice.customerName}</strong>${invoice.customerPhone ? ` · 📞 ${invoice.customerPhone}` : ''}${invoice.customerAddress ? `<br>${invoice.customerAddress}` : ''}${h.idNo ? `<br>No. KTP/SIM: ${h.idNo}` : ''}</td></tr>
+  </table>
+
+  <h3>Objek Sewa</h3>
+  <table class="kv">
+    <tr><td>Kendaraan</td><td>${veh} · Plat <strong>${plate}</strong></td></tr>
+    <tr><td>Periode Sewa</td><td>${r.pickupAt ? `${fmtDT(r.pickupAt)} s.d. ${fmtDT(r.returnAt)}${r.days ? ` (${r.days} hari)` : ''}` : '-'}</td></tr>
+    <tr><td>Tujuan / Keperluan</td><td>${r.destination || '-'}${r.withDriver ? ` · dengan sopir${r.driverName ? ' (' + r.driverName + ')' : ''}` : ' · lepas kunci'}</td></tr>
+    <tr><td>Biaya Sewa</td><td>Rp ${fmt(invoice.total)}</td></tr>
+    ${dep ? `<tr><td>Deposit / Jaminan</td><td>${dep.type === 'barang' ? `Barang: ${dep.item || '-'}` : `Uang Rp ${fmt(dep.amount)}`} · ${dep.status === 'dikembalikan' ? 'sudah dikembalikan' : 'ditahan'}</td></tr>` : ''}
+  </table>
+
+  <h3>Ketentuan Sewa</h3>
+  <ol>${clauses.map(c => `<li>${c}</li>`).join('')}</ol>
+
+  <div class="pb"></div>
+  <h3>A. Serah Terima — Pengambilan Kendaraan</h3>
+  <div class="two">
+    <table class="kv"><tr><td>Waktu</td><td>${out.at ? fmtDT(out.at) : '-'}</td></tr><tr><td>KM Awal</td><td>${out.km || '-'}</td></tr><tr><td>BBM</td><td>${out.fuel || '-'}</td></tr></table>
+    <table><tr><th>Pemeriksaan</th><th>Kondisi</th></tr>${checkRows(out)}</table>
+  </div>
+  ${out.notes ? `<div class="note"><strong>Catatan kondisi awal:</strong> ${out.notes}</div>` : ''}
+  <div class="sgs"><div></div>${sig(out.custSig, 'Penyewa')}${sig(out.staffSig, 'Petugas ' + co)}<div></div></div>
+
+  <h3>B. Serah Terima — Pengembalian Kendaraan</h3>
+  <div class="two">
+    <table class="kv"><tr><td>Waktu</td><td>${back.at ? fmtDT(back.at) : '-'}</td></tr><tr><td>KM Akhir</td><td>${back.km || '-'}</td></tr><tr><td>BBM</td><td>${back.fuel || '-'}</td></tr>
+      <tr><td>Jarak Tempuh</td><td>${out.km && back.km ? fmt(Math.max(0, Number(back.km) - Number(out.km))) + ' km' : '-'}</td></tr></table>
+    <table><tr><th>Pemeriksaan</th><th>Kondisi</th></tr>${checkRows(back)}</table>
+  </div>
+  ${back.notes ? `<div class="note"><strong>Catatan kondisi akhir:</strong> ${back.notes}</div>` : ''}
+  ${fines.length ? `<table style="margin-top:6px;"><tr><th>Denda / Biaya Tambahan</th><th style="width:120px;text-align:right;">Jumlah</th></tr>${fines.map(f => `<tr><td>${f.desc}</td><td style="text-align:right;">Rp ${fmt(f.amount)}</td></tr>`).join('')}</table>` : ''}
+  <div class="sgs"><div></div>${sig(back.custSig, 'Penyewa')}${sig(back.staffSig, 'Petugas ' + co)}<div></div></div>
+</div>
+<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+</body></html>`;
+}
+
+export function doPrintHandover(invoice, settings) {
+  const w = window.open('', '_blank', 'width=960,height=900,scrollbars=yes');
+  if (!w) { alert('Popup diblokir! Izinkan popup lalu coba lagi.'); return; }
+  w.document.write(buildHandoverHTML(invoice, settings));
+  w.document.close();
 }

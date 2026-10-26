@@ -11,16 +11,28 @@ import Settings   from './pages/Settings.jsx';
 import Accounts   from './pages/Accounts.jsx';
 import BlankReceipt from './pages/BlankReceipt.jsx';
 import BusinessCard from './pages/BusinessCard.jsx';
+import Features   from './pages/Features.jsx';
+import FeatureRequests from './pages/FeatureRequests.jsx';
+import Fleet      from './pages/Fleet.jsx';
+import Bookings   from './pages/Bookings.jsx';
+import Expenses   from './pages/Expenses.jsx';
+import Reports    from './pages/Reports.jsx';
+import Backup     from './pages/Backup.jsx';
+import { LockedFeature } from './components/FeatureGate.jsx';
+import { canUse } from './lib/features.js';
 import { DEF_SETTINGS } from './lib/utils.js';
 import {
   watchAuthState, bindAndVerifyAccount, logoutSession,
   getSettings, getCustomers, getInvoices, getShares,
+  listCol, getMyAccess, createFeatureRequest, cancelFeatureRequest, getAllFeatureRequests,
 } from './lib/firebase.js';
 
 const NAV_TITLES = {
   dashboard: 'Dashboard', invoices: 'Invoice & Kwitansi', 'new-invoice': 'Buat Invoice Baru',
   'blank-receipt': 'Kwitansi Kosong', 'business-card': 'Cetak Kartu Nama',
   customers: 'Data Customer', settings: 'Pengaturan', accounts: 'Daftar Akun',
+  features: 'Fitur Tambahan', 'feature-requests': 'Pengajuan Fitur', fleet: 'Armada & Sopir',
+  bookings: 'Booking & Kalender', expenses: 'Pengeluaran', reports: 'Laporan & Piutang', backup: 'Backup Data',
 };
 
 // Timeout helper — jika Firebase > 8 detik, lempar error
@@ -43,6 +55,16 @@ export default function App() {
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [loadError,      setLoadError]     = useState('');
   const [sidebarOpen,    setSidebarOpen]   = useState(false);
+  // ── Fitur tambahan (khusus admin utama; akun biasa perlu persetujuan) ──
+  const [features,       setFeatures]      = useState([]);
+  const [requests,       setRequests]      = useState([]);
+  const [adminPending,   setAdminPending]  = useState(0);
+  const [vehicles,       setVehicles]      = useState([]);
+  const [drivers,        setDrivers]       = useState([]);
+  const [bookings,       setBookings]      = useState([]);
+  const [expenses,       setExpenses]      = useState([]);
+  const [featureWarn,    setFeatureWarn]   = useState('');
+  const [bookingDraft,   setBookingDraft]  = useState(null);
 
   // ── Pantau status login Firebase Auth (Login Utama & Akun) ──────
   useEffect(() => {
@@ -50,6 +72,7 @@ export default function App() {
       if (u) {
         try {
           const res = await bindAndVerifyAccount(u);
+          setFeatures(res.features || []);
           setFbUser(u);
           setSessionKind(res.kind);
         } catch (e) {
@@ -70,6 +93,44 @@ export default function App() {
     return unsub;
   }, []);
 
+  const can = id => canUse(sessionKind, features, id);
+
+  // Muat data fitur tambahan hanya untuk fitur yang boleh dipakai (hindari "permission denied")
+  const loadFeatureData = async (kind, feats) => {
+    const has = id => canUse(kind, feats, id);
+    const plan = [['vehicles', 'fleet', setVehicles], ['drivers', 'fleet', setDrivers],
+                  ['bookings', 'booking', setBookings], ['expenses', 'expenses', setExpenses]];
+    const failed = [];
+    await Promise.all(plan.map(async ([col, f, set]) => {
+      if (!has(f)) { set([]); return; }
+      try { set(await listCol(col)); } catch (e) { console.error('loadFeatureData', col, e); failed.push(col); }
+    }));
+    setFeatureWarn(failed.length ? `Data fitur (${failed.join(', ')}) gagal dimuat. Pastikan Firestore Rules terbaru sudah dipublikasikan (lihat README).` : '');
+  };
+
+  const refreshAdminPending = async () => {
+    try { setAdminPending((await getAllFeatureRequests()).filter(r => r.status === 'pending').length); }
+    catch (e) { console.warn('pengajuan fitur:', e.message); }
+  };
+
+  const refreshAccess = async () => {
+    try {
+      const a = await getMyAccess();
+      setRequests(a.requests);
+      if ([...a.features].sort().join() !== [...features].sort().join()) {
+        setFeatures(a.features);
+        await loadFeatureData('account', a.features);
+      }
+    } catch (e) { console.warn('refreshAccess:', e.message); }
+  };
+
+  const access = {
+    requests,
+    refresh: refreshAccess,
+    submit: async (fid, note) => { const r = await createFeatureRequest(fid, note); setRequests(l => [r, ...l]); },
+    cancel: async id => { await cancelFeatureRequest(id); setRequests(l => l.filter(r => r.id !== id)); },
+  };
+
   // ── Muat data khusus sesi aktif setiap kali sesi berganti ───────
   useEffect(() => {
     if (!sessionKind) return;
@@ -86,6 +147,14 @@ export default function App() {
         setCustomers(c || []);
         setInvoices(i  || []);
         setShares(sh || {});
+
+        // Izin fitur terbaru + pengajuan (akun biasa) / jumlah pengajuan menunggu (admin)
+        let feats = features;
+        if (sessionKind === 'account') {
+          try { const a = await getMyAccess(); feats = a.features; setFeatures(a.features); setRequests(a.requests); }
+          catch (e) { console.warn('getMyAccess:', e.message); }
+        } else { refreshAdminPending(); }
+        await loadFeatureData(sessionKind, feats);
       } catch(e) {
         if (cancelled) return;
         const msg = e.message === 'timeout'
@@ -105,6 +174,7 @@ export default function App() {
   const setPage = p => {
     if (p !== 'new-invoice') setEditingInvoice(null);
     if (p !== 'invoices')    setViewingId(null);
+    if (p !== 'new-invoice') setBookingDraft(null);
     setPageState(p);
   };
 
@@ -113,6 +183,7 @@ export default function App() {
     setSessionKind(null);
     setFbUser(null);
     setCustomers([]); setInvoices([]); setShares({}); setSettings(DEF_SETTINGS);
+    setFeatures([]); setRequests([]); setVehicles([]); setDrivers([]); setBookings([]); setExpenses([]); setFeatureWarn(''); setBookingDraft(null);
     setPageState('dashboard'); setLoadError(''); setSidebarOpen(false);
   };
 
@@ -176,21 +247,34 @@ export default function App() {
   );
 
   // ── App ───────────────────────────────────────────────────────
+  const gate = (id, el) => can(id) ? el : <LockedFeature featureId={id} access={access} setPage={setPage} />;
+
   const renderPage = () => {
     switch (page) {
-      case 'dashboard':   return <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} pendingCount={pendingCount} />;
-      case 'customers':   return <Customers customers={customers} setCustomers={setCustomers} />;
+      case 'dashboard':   return <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} pendingCount={pendingCount}
+                                    can={can} vehicles={vehicles} bookings={bookings} />;
+      case 'customers':   return <Customers customers={customers} setCustomers={setCustomers} invoices={invoices} can={can} setPage={setPage} />;
       case 'invoices':    return <Invoices  invoices={invoices} setInvoices={setInvoices} customers={customers} settings={settings}
                                     setPage={setPage} viewingId={viewingId} setViewingId={setViewingId}
                                     setEditingInvoice={setEditingInvoice}
-                                    shares={shares} refreshShares={refreshShares} />;
+                                    shares={shares} refreshShares={refreshShares} can={can} />;
       case 'new-invoice': return <NewInvoice invoices={invoices} customers={customers} setInvoices={setInvoices}
                                     setPage={setPage} setViewingId={setViewingId}
-                                    editingInvoice={editingInvoice} setEditingInvoice={setEditingInvoice} settings={settings} />;
-      case 'settings':    return <Settings settings={settings} setSettings={setSettings} sessionKind={sessionKind} fbUser={fbUser} />;
-      case 'accounts':    return sessionKind === 'master' ? <Accounts /> : <Dashboard invoices={invoices} customers={customers} setPage={setPage} setViewingId={setViewingId} pendingCount={pendingCount} />;
+                                    editingInvoice={editingInvoice} setEditingInvoice={setEditingInvoice} settings={settings}
+                                    can={can} vehicles={vehicles} drivers={drivers} bookings={bookings} setBookings={setBookings}
+                                    bookingDraft={bookingDraft} setBookingDraft={setBookingDraft} />;
+      case 'settings':    return <Settings settings={settings} setSettings={setSettings} sessionKind={sessionKind} fbUser={fbUser} can={can} />;
+      case 'accounts':    return sessionKind === 'master' ? <Accounts /> : null;
       case 'blank-receipt': return <BlankReceipt settings={settings} setPage={setPage} />;
       case 'business-card': return <BusinessCard settings={settings} setPage={setPage} />;
+      case 'features':    return <Features sessionKind={sessionKind} features={features} access={access} setPage={setPage} />;
+      case 'feature-requests': return sessionKind === 'master' ? <FeatureRequests onChanged={refreshAdminPending} /> : null;
+      case 'fleet':       return gate('fleet', <Fleet vehicles={vehicles} setVehicles={setVehicles} drivers={drivers} setDrivers={setDrivers} invoices={invoices} bookings={bookings} />);
+      case 'bookings':    return gate('booking', <Bookings bookings={bookings} setBookings={setBookings} vehicles={vehicles} invoices={invoices} customers={customers}
+                                    settings={settings} setPage={setPage} setBookingDraft={setBookingDraft} setEditingInvoice={setEditingInvoice} setViewingId={setViewingId} />);
+      case 'expenses':    return gate('expenses', <Expenses expenses={expenses} setExpenses={setExpenses} vehicles={vehicles} invoices={invoices} fleetOn={can('fleet')} />);
+      case 'reports':     return gate('reports', <Reports invoices={invoices} expenses={expenses} vehicles={vehicles} settings={settings} setPage={setPage} setViewingId={setViewingId} />);
+      case 'backup':      return gate('backup', <Backup settings={settings} customers={customers} invoices={invoices} />);
       default: return null;
     }
   };
@@ -206,6 +290,8 @@ export default function App() {
         settings={settings}
         sessionKind={sessionKind}
         accountLabel={accountLabel}
+        can={can}
+        requestBadge={adminPending}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -217,7 +303,12 @@ export default function App() {
           </button>
           <div className="font-bold text-[#0f2544] text-sm">{NAV_TITLES[page] || 'Dearma Rental'}</div>
         </div>
-        <main className="flex-1 overflow-y-auto">{renderPage()}</main>
+        <main className="flex-1 overflow-y-auto">
+          {featureWarn && (
+            <div className="mx-4 mt-4 sm:mx-6 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-4 py-2.5">⚠️ {featureWarn}</div>
+          )}
+          {renderPage()}
+        </main>
       </div>
     </div>
   );

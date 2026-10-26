@@ -33,6 +33,42 @@ export const Textarea = ({ label, className = '', ...p }) => (
   </div>
 );
 
+export const Select = ({ label, className = '', children, ...p }) => (
+  <div>
+    {label && (
+      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+        {label}
+      </label>
+    )}
+    <select
+      {...p}
+      className={`w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white
+        focus:outline-none focus:ring-2 focus:ring-[#0f2544]/25 focus:border-[#0f2544] transition ${className}`}
+    >
+      {children}
+    </select>
+  </div>
+);
+
+// Jendela dialog umum
+export const Modal = ({ title, subtitle, onClose, children, footer, wide = false }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
+    style={{ background: 'rgba(15,37,68,0.7)', backdropFilter: 'blur(4px)' }}
+    onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}>
+    <div className={`bg-white rounded-3xl shadow-2xl w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} max-h-[92vh] flex flex-col overflow-hidden`}>
+      <div className="px-6 pt-6 pb-3 flex items-start justify-between gap-3 flex-shrink-0">
+        <div>
+          <h2 className="font-black text-[#0f2544] text-lg" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>{title}</h2>
+          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 -mr-1" aria-label="Tutup">✕</button>
+      </div>
+      <div className="px-6 pb-4 overflow-y-auto flex-1">{children}</div>
+      {footer && <div className="px-6 pb-6 pt-2 flex gap-3 flex-shrink-0 flex-wrap">{footer}</div>}
+    </div>
+  </div>
+);
+
 export const Btn = ({ variant = 'primary', children, className = '', ...p }) => {
   const styles = {
     primary: 'bg-[#0f2544] hover:bg-[#1a3a6b] text-white shadow-sm',

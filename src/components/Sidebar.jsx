@@ -11,10 +11,21 @@ const NAV = [
   { id: 'settings',    label: 'Pengaturan',           icon: 'gear'  },
 ];
 
-export default function Sidebar({ page, setPage, onLogout, settings, sessionKind, accountLabel, isOpen, onClose }) {
+const EXTRA_NAV = [
+  { id: 'features',  label: 'Fitur Tambahan',     emoji: '✨' },
+  { id: 'fleet',     label: 'Armada & Sopir',     emoji: '🚗', feature: 'fleet' },
+  { id: 'bookings',  label: 'Booking & Kalender', emoji: '📅', feature: 'booking' },
+  { id: 'expenses',  label: 'Pengeluaran',        emoji: '🧰', feature: 'expenses' },
+  { id: 'reports',   label: 'Laporan & Piutang',  emoji: '📊', feature: 'reports' },
+  { id: 'backup',    label: 'Backup Data',        emoji: '💾', feature: 'backup' },
+];
+
+export default function Sidebar({ page, setPage, onLogout, settings, sessionKind, accountLabel, isOpen, onClose, can = () => true, requestBadge = 0 }) {
   const nav = sessionKind === 'master'
-    ? [...NAV, { id: 'accounts', label: 'Daftar Akun', icon: 'list' }]
-    : NAV;
+    ? [...NAV, ...EXTRA_NAV,
+       { id: 'feature-requests', label: 'Pengajuan Fitur', emoji: '📨', badge: requestBadge },
+       { id: 'accounts', label: 'Daftar Akun', icon: 'list' }]
+    : [...NAV, ...EXTRA_NAV];
 
   const handleNav = id => { setPage(id); onClose?.(); };
 
@@ -68,8 +79,12 @@ export default function Sidebar({ page, setPage, onLogout, settings, sessionKind
                   ? 'bg-white text-[#0f2544] font-bold shadow-lg'
                   : 'text-white/60 hover:bg-white/10 hover:text-white'}`}
             >
-              <span className={page === m.id ? 'text-[#d4a017]' : ''}>{Icons[m.icon] || Icons.users}</span>
-              <span>{m.label}</span>
+              <span className={page === m.id ? 'text-[#d4a017]' : ''}>
+                {m.emoji ? <span className="inline-block w-[18px] text-center text-base leading-none">{m.emoji}</span> : (Icons[m.icon] || Icons.users)}
+              </span>
+              <span className="flex-1 truncate">{m.label}</span>
+              {m.feature && !can(m.feature) && <span className="text-xs opacity-60" title="Terkunci — ajukan ke admin">🔒</span>}
+              {m.badge > 0 && <span className="bg-amber-400 text-[#0f2544] text-[10px] font-black rounded-full px-1.5 py-0.5">{m.badge}</span>}
             </button>
           ))}
         </nav>

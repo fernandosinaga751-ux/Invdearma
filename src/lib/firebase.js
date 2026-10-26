@@ -12,6 +12,8 @@ import {
   query, where,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { shrinkImage } from './utils.js';
+import { withRequires } from './features.js';
 
 const cfg = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -99,7 +101,7 @@ export async function bindAndVerifyAccount(fbUser) {
     throw new Error('ACCOUNT_DISABLED');
   }
   session = { kind: 'account', uid: fbUser.uid };
-  return { kind: 'account' };
+  return { kind: 'account', features: reg.exists() ? (reg.data().features || []) : [] };
 }
 
 export async function registerAccount(email, password, displayName) {
@@ -209,6 +211,10 @@ export async function deleteAccountCompletely(uid) {
   const invSnap = await getDocs(collection(db, 'users', uid, 'invoices'));
   await Promise.all(invSnap.docs.map(d => deleteDoc(d.ref)));
 
+  for (const col of ['vehicles', 'drivers', 'bookings', 'expenses']) {
+    const sn = await getDocs(collection(db, 'users', uid, col)).catch(() => null);
+    if (sn) await Promise.all(sn.docs.map(d => deleteDoc(d.ref)));
+  }
   await deleteDoc(doc(db, 'users', uid, 'config', 'settings')).catch(() => {});
   // Dokumen accounts/{uid} SENGAJA tidak dihapus — lihat penjelasan di atas.
 
@@ -275,6 +281,80 @@ export async function deleteInvoice(id) {
   await deleteDoc(sDoc('invoices', id));
 }
 
+// ─── KOLEKSI FITUR TAMBAHAN (armada, sopir, booking, pengeluaran) ─────────
+// Mengikuti sesi aktif: admin utama → koleksi atas; akun → users/{uid}/...
+// Akses akun dikunci di Firestore Rules berdasarkan accounts/{uid}.features.
+export async function listCol(name) {
+  const s = await getDocs(sCol(name));
+  return s.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function addTo(name, data) {
+  const payload = { ...data, createdAt: new Date().toISOString() };
+  const ref = await addDoc(sCol(name), payload);
+  return { id: ref.id, ...payload };
+}
+export async function updateIn(name, id, data) {
+  await setDoc(sDoc(name, id), data, { merge: true });
+}
+export async function removeFrom(name, id) {
+  await deleteDoc(sDoc(name, id));
+}
+
+// ─── HAK AKSES FITUR & PENGAJUAN FITUR ──────────────────────────
+// accounts/{uid}.features  → daftar fitur yang dibuka (hanya admin yang bisa mengubah)
+// featureRequests/{id}      → pengajuan dari akun, disetujui / ditolak admin
+export async function getMyAccess() {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return { features: [], requests: [] };
+  const acc = await getDoc(doc(db, 'accounts', uid));
+  const features = acc.exists() ? (acc.data().features || []) : [];
+  const rs = await getDocs(query(collection(db, 'featureRequests'), where('uid', '==', uid)));
+  const requests = rs.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return { features, requests };
+}
+
+export async function createFeatureRequest(featureId, note = '') {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Sesi login tidak ditemukan.');
+  const payload = {
+    uid: u.uid, email: u.email || '', displayName: u.displayName || '',
+    features: [featureId], note: String(note || '').slice(0, 500),
+    status: 'pending', createdAt: new Date().toISOString(),
+  };
+  const ref = await addDoc(collection(db, 'featureRequests'), payload);
+  return { id: ref.id, ...payload };
+}
+export async function cancelFeatureRequest(id) {
+  await deleteDoc(doc(db, 'featureRequests', id));
+}
+
+export async function getAllFeatureRequests() {
+  const s = await getDocs(collection(db, 'featureRequests'));
+  return s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+export async function setAccountFeatures(uid, features) {
+  const list = withRequires(features);
+  await setDoc(doc(db, 'accounts', uid), { features: list }, { merge: true });
+  return list;
+}
+
+// Setujui (sebagian / seluruhnya) atau tolak pengajuan
+export async function resolveFeatureRequest(req, { approve, granted = [] }) {
+  if (approve) {
+    const acc = await getDoc(doc(db, 'accounts', req.uid));
+    const cur = acc.exists() ? (acc.data().features || []) : [];
+    await setAccountFeatures(req.uid, [...new Set([...cur, ...granted])]);
+  }
+  await updateDoc(doc(db, 'featureRequests', req.id), {
+    status: approve ? 'approved' : 'rejected',
+    granted: approve ? withRequires(granted) : [],
+    resolvedAt: new Date().toISOString(),
+  });
+}
+
 // ─── SHARE LINK (customer melihat invoice & mengusulkan diskon/pajak) ───
 // Dokumen publik di koleksi top-level `shares/{token}`. Token acak panjang
 // = "kunci" link. Isinya hanya salinan (snapshot) data yang boleh dilihat
@@ -291,7 +371,13 @@ export function shareUrl(token) {
   return `${window.location.origin}/v/${token}`;
 }
 
-function buildShareSnapshot(invoice, settings = {}) {
+async function buildShareSnapshot(invoice, settings = {}) {
+  const [logo, signature, stamp, qris] = await Promise.all([
+    shrinkImage(settings.logo, 300, { allowJpeg: true }),
+    shrinkImage(settings.signature, 420),
+    shrinkImage(settings.stamp, 300),
+    shrinkImage(settings.qris, 360, { allowJpeg: true }),
+  ]);
   return {
     ownerUid: auth.currentUser.uid,
     invoiceId: invoice.id,
@@ -302,6 +388,13 @@ function buildShareSnapshot(invoice, settings = {}) {
       customerName: invoice.customerName || '',
       date: invoice.date || '',
       dueDate: invoice.dueDate || '',
+      paidDate: invoice.paidDate || '',
+      payments: (invoice.payments || []).map(p => ({ id: p.id, date: p.date, amount: p.amount, method: p.method || '', note: p.note || '' })),
+      rental: invoice.rental?.vehicleId ? {
+        vehicleName: invoice.rental.vehicleName || '', plate: invoice.rental.plate || '',
+        pickupAt: invoice.rental.pickupAt || '', returnAt: invoice.rental.returnAt || '', days: invoice.rental.days || 0,
+        withDriver: !!invoice.rental.withDriver, destination: invoice.rental.destination || '',
+      } : null,
       items: (invoice.items || []).map(i => ({
         description: i.description || '', qty: Number(i.qty) || 0, price: Number(i.price) || 0,
       })),
@@ -322,6 +415,9 @@ function buildShareSnapshot(invoice, settings = {}) {
       ownerName: settings.ownerName || '',
       bankName: settings.bankName || '',
       bankAccount: settings.bankAccount || '',
+      email: settings.email || '',
+      website: settings.website || '',
+      logo, signature, stamp, qris, materai: !!settings.materai, // untuk tampilan & unduhan kwitansi di sisi customer
     },
   };
 }
@@ -331,7 +427,7 @@ export async function ensureShare(invoice, settings, { forceNew = false } = {}) 
   const fresh = forceNew || !invoice.shareToken;
   if (forceNew && invoice.shareToken) await deleteShare(invoice.shareToken); // buang link lama
   const token = fresh ? newShareToken() : invoice.shareToken;
-  await setDoc(doc(db, SHARE_COL, token), buildShareSnapshot(invoice, settings), { merge: true });
+  await setDoc(doc(db, SHARE_COL, token), await buildShareSnapshot(invoice, settings), { merge: true });
   if (fresh) await updateInvoice(invoice.id, { shareToken: token, shareClosed: false });
   return token;
 }
