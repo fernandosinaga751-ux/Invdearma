@@ -740,14 +740,18 @@ export default function Invoices({ invoices, setInvoices, customers = [], settin
                               className="p-1.5 text-slate-400 hover:text-[#0f2544] hover:bg-slate-100 rounded-lg transition">{Icons.eye}</button>
                             <button onClick={() => doPrint(inv, 'invoice', settings)} title="Cetak Invoice"
                               className="p-1.5 text-slate-400 hover:text-[#0f2544] hover:bg-slate-100 rounded-lg transition">{Icons.print}</button>
-                            {(inv.payments || []).length > 0
-                              ? <button onClick={() => setViewingId(inv.id)} title="Lihat pembayaran & kwitansi"
-                                  className="px-2 py-1 text-[10px] font-black rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition">BAYAR</button>
-                              : isPaid
-                              ? <button onClick={() => doPrint(inv, 'kwitansi', settings)} title="Cetak Kwitansi"
-                                  className="px-2 py-1 text-[10px] font-black rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">KWIT</button>
-                              : <button onClick={() => setBayarInv(inv)} title="Sudah Bayar"
-                                  className="px-2 py-1 text-[10px] font-black rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition">BAYAR</button>
+                            {/* Lunas → tidak ada tombol BAYAR, hanya KWIT. Belum lunas → tombol BAYAR. */}
+                            {isPaid
+                              ? ((inv.payments || []).length > 0
+                                  ? <button onClick={() => setViewingId(inv.id)} title="Lihat kwitansi per pembayaran"
+                                      className="px-2 py-1 text-[10px] font-black rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">KWIT</button>
+                                  : <button onClick={() => doPrint(inv, 'kwitansi', settings)} title="Cetak Kwitansi"
+                                      className="px-2 py-1 text-[10px] font-black rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition">KWIT</button>)
+                              : ((inv.payments || []).length > 0
+                                  ? <button onClick={() => setViewingId(inv.id)} title="Catat pembayaran berikutnya"
+                                      className="px-2 py-1 text-[10px] font-black rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition">BAYAR</button>
+                                  : <button onClick={() => setBayarInv(inv)} title="Sudah Bayar"
+                                      className="px-2 py-1 text-[10px] font-black rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition">BAYAR</button>)
                             }
                             {can('handover') && inv.handoverStaff?.name && (
                               <button onClick={() => setHoWaInv(inv)} title={`Kirim link serah terima ke ${inv.handoverStaff.name} via WhatsApp`}
