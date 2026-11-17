@@ -3,6 +3,36 @@ import { fmt, formatDateID, terbilang, fileNameSafe, taxLabel, taxSign, escHtml 
 import { paidTotal, outstanding, fmtDT, DEFAULT_TERMS, HANDOVER_CHECKS } from './rental.js';
 
 // ════════════════════════════════════════════════════════════════
+// FIT-TO-PAGE — invoice & kwitansi SELALU A4 portrait, 1 halaman.
+// Jika isi lebih tinggi dari area cetak (banyak item / catatan panjang),
+// isi otomatis diperkecil (scale) sampai muat, tidak pernah turun ke halaman 2.
+// ════════════════════════════════════════════════════════════════
+const FIT_PAGE_SCRIPT = `
+function fitPage(){
+  var p=document.querySelector('.page'), c=document.querySelector('.content');
+  if(!p||!c) return;
+  c.style.transform=''; c.style.width=''; c.style.transformOrigin='top left';
+  var cs=getComputedStyle(p);
+  var avail=p.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-2;
+  var h=c.scrollHeight;
+  if(h>avail){
+    var s=Math.max(avail/h,0.4);
+    c.style.transform='scale('+s+')';
+    c.style.width=(100/s)+'%';
+  }
+}
+window.addEventListener('load',function(){
+  fitPage();
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(fitPage);
+});
+window.addEventListener('beforeprint',fitPage);
+`;
+const AUTO_PRINT_SCRIPT = `window.addEventListener('load',function(){
+  var go=function(){fitPage();setTimeout(function(){window.print();},300);};
+  if(document.fonts&&document.fonts.ready){document.fonts.ready.then(go);}else{go();}
+});`;
+
+// ════════════════════════════════════════════════════════════════
 // INVOICE (dengan Due Date)
 // ════════════════════════════════════════════════════════════════
 function buildInvoiceHTML(invoice, settings) {
@@ -16,7 +46,7 @@ function buildInvoiceHTML(invoice, settings) {
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:210mm;overflow-x:hidden;}
   body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
-  .page{width:210mm;min-height:297mm;margin:0 auto;padding:14mm 16mm;position:relative;}
+  .page{width:210mm;height:296mm;overflow:hidden;margin:0 auto;padding:14mm 16mm;position:relative;}
   .header{display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:3px solid #0f2544;margin-bottom:18px;}
   .logo-box{width:72px;height:72px;flex-shrink:0;}
   .logo-box img{width:100%;height:100%;object-fit:contain;}
@@ -61,7 +91,8 @@ function buildInvoiceHTML(invoice, settings) {
   @media print{
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 portrait;margin:0;}
-    .page{margin:0;width:100%;max-height:297mm;overflow:hidden;}
+    html,body{width:210mm;height:296mm;overflow:hidden;}
+    .page{margin:0;width:210mm;height:296mm;overflow:hidden;}
   }
 </style></head>
 <body><div class="page">
@@ -170,7 +201,7 @@ function buildInvoiceHTML(invoice, settings) {
     </div>
   </div>
 </div>
-<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>
+<script>${FIT_PAGE_SCRIPT}${AUTO_PRINT_SCRIPT}</script>
 </body></html>`;
 }
 
@@ -182,10 +213,7 @@ export function buildKwitansiHTML(invoice, settings, { autoPrint = true } = {}) 
   const paidDate = invoice.paidDate || invoice.date;
   const nominal = invoice.kwNominal != null ? invoice.kwNominal : (invoice.panjar > 0 ? (invoice.sisa || invoice.total) : invoice.total);
   const terbilangStr = terbilang(nominal);
-  // Estimasi jumlah baris item (deskripsi panjang = >1 baris). Banyak baris → kertas A4 portrait
-  // yang tinggi halamannya mengikuti isi; sedikit baris → A5 landscape seperti biasa.
-  const itemLines = (invoice.items || []).reduce((n, it) => n + Math.max(1, Math.ceil(String(it.description || '').length / 55)), 0);
-  const big = itemLines > 3;
+  // Selalu A4 portrait & 1 halaman; isi diperkecil otomatis oleh fitPage() bila terlalu panjang.
 
   return `<!DOCTYPE html>
 <html lang="id"><head>
@@ -197,7 +225,7 @@ export function buildKwitansiHTML(invoice, settings, { autoPrint = true } = {}) 
   html,body{width:210mm;}
   .kw-row,.footer{break-inside:avoid;page-break-inside:avoid;}
   body{font-family:'Plus Jakarta Sans',Arial,sans-serif;background:#fff;color:#1a1a2e;font-size:12px;}
-  .page{width:210mm;${big ? '' : 'min-height:148mm;'}margin:0 auto;padding:10mm 14mm;position:relative;}
+  .page{width:210mm;height:296mm;overflow:hidden;margin:0 auto;padding:10mm 14mm;position:relative;}
   /* Watermark LUNAS */
   .wm-lunas{
     position:absolute;top:50%;left:50%;
@@ -250,8 +278,9 @@ export function buildKwitansiHTML(invoice, settings, { autoPrint = true } = {}) 
   .tanggal-box{font-size:11px;color:#555;margin-bottom:6px;}
   @media print{
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    @page{size:${big ? 'A4 portrait' : 'A5 landscape'};margin:0;}
-    .page{margin:0;width:100%;${big ? '' : 'min-height:148mm;'}}
+    @page{size:A4 portrait;margin:0;}
+    html,body{width:210mm;height:296mm;overflow:hidden;}
+    .page{margin:0;width:210mm;height:296mm;overflow:hidden;}
   }
 </style></head>
 <body><div class="page">
@@ -361,7 +390,7 @@ export function buildKwitansiHTML(invoice, settings, { autoPrint = true } = {}) 
     </div>
   </div>
 </div>
-${autoPrint ? '<script>window.onload=()=>setTimeout(()=>window.print(),500);</script>' : ''}
+<script>${FIT_PAGE_SCRIPT}${autoPrint ? AUTO_PRINT_SCRIPT : ''}</script>
 </body></html>`;
 }
 

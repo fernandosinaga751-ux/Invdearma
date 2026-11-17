@@ -18,6 +18,7 @@ export async function renderKwitansiCanvas(invoice, settings) {
     for (let i = 0; i < 40 && d.readyState !== 'complete'; i++) await sleep(50);
     try { await Promise.race([d.fonts.ready, sleep(2500)]); } catch { /* abaikan */ }
     await Promise.all([...d.images].map(im => (im.complete ? 1 : new Promise(r => { im.onload = im.onerror = r; }))));
+    try { d.defaultView.fitPage?.(); } catch { /* abaikan */ }   // pastikan isi muat 1 halaman A4
 
     const page = d.querySelector('.page');
     const { default: html2canvas } = await import('html2canvas');
@@ -30,7 +31,7 @@ export async function renderKwitansiCanvas(invoice, settings) {
 export async function downloadKwitansiPdf(canvas, invoice, suffix = '') {
   const { jsPDF } = await import('jspdf');
   const w = 210;                                  // lebar kertas (mm)
-  const h = (w * canvas.height) / canvas.width;   // tinggi mengikuti isi (A5 landscape / A4 portrait)
+  const h = (w * canvas.height) / canvas.width;   // selalu A4 portrait, 1 halaman
   const pdf = new jsPDF({ orientation: h > w ? 'p' : 'l', unit: 'mm', format: [w, h] });
   pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h);
   const name = `Kwitansi - ${fileNameSafe(invoice.customerName)} - ${String(invoice.invoiceNo || '').replace(/[\\/:*?"<>|]/g, '-')}${suffix ? ' - ' + suffix : ''}`;
