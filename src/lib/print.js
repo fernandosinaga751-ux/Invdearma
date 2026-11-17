@@ -299,7 +299,7 @@ export function buildKwitansiHTML(invoice, settings, { autoPrint = true } = {}) 
       </div>
       <div class="kw-title">
         <div class="t">KWITANSI</div>
-        <div class="no">${invoice.invoiceNo}</div>
+        <div class="no">${invoice.kwNo || invoice.invoiceNo}</div>
       </div>
     </div>
 

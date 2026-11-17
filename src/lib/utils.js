@@ -13,19 +13,27 @@ export const formatDateID = d => {
   return `${dt.getDate()} ${MONTHS_ID[dt.getMonth()]} ${dt.getFullYear()}`;
 };
 
-// Nomor urut invoice di-reset setiap tanggal: invoice pertama di tanggal itu = 01,
-// berikutnya 02, 03, dst. Tanggal berikutnya kembali ke 01.
-// Memakai nomor TERBESAR yang sudah ada di tanggal tsb (bukan sekadar jumlah),
-// supaya tidak bentrok bila ada invoice yang dihapus.
-export function genInvNo(invoices, dateStr) {
-  const seqOf = no => {
-    const m = String(no || '').match(/^\s*No\.?\s*(\d+)/i);
-    return m ? parseInt(m[1], 10) : 0;
-  };
-  const same = invoices.filter(i => i.date === dateStr);
-  const n = Math.max(same.length, ...same.map(i => seqOf(i.invoiceNo))) + 1;
-  const d = new Date(dateStr + 'T00:00:00');
-  return `No.${String(n).padStart(2, '0')}/${ROMAN[d.getMonth()]}/DRM/${d.getFullYear()}`;
+// Nomor invoice format baku:  NNN/INV/DRM/BULAN-ROMAWI/TAHUN   mis. 001/INV/DRM/XI/2026
+// • Urutan (NNN) di-reset setiap BULAN, sehingga kombinasi nomor+bulan+tahun selalu unik
+//   (format lama "No.01/XI/DRM/2026" me-reset per tanggal → nomor bisa kembar di tanggal berbeda).
+// • Memakai nomor TERBESAR yang ada di bulan tsb (bukan jumlah), jadi aman bila ada invoice dihapus.
+// • Dijamin tidak sama dengan nomor invoice mana pun yang sudah ada.
+// • Nomor lama (format "No.xx/...") tidak diubah; format baru berbeda sehingga tidak bentrok.
+export function genInvNo(invoices, dateStr, code = 'DRM') {
+  let d = new Date(String(dateStr || '') + 'T00:00:00');
+  if (isNaN(d)) d = new Date();
+  const suffix = `/INV/${code}/${ROMAN[d.getMonth()]}/${d.getFullYear()}`;
+  const used = new Set((invoices || []).map(i => String(i.invoiceNo || '').trim()));
+  let max = 0;
+  for (const no of used) {
+    if (!no.endsWith(suffix)) continue;
+    const m = no.match(/^(\d+)\//);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  let n = max + 1;
+  const make = k => `${String(k).padStart(3, '0')}${suffix}`;
+  while (used.has(make(n))) n++;
+  return make(n);
 }
 
 // ─── WhatsApp ────────────────────────────────────────────────────────────────
