@@ -10,6 +10,7 @@ import Invoices   from './pages/Invoices.jsx';
 import Settings   from './pages/Settings.jsx';
 import Accounts   from './pages/Accounts.jsx';
 import BlankReceipt from './pages/BlankReceipt.jsx';
+import CustomReceipt from './pages/CustomReceipt.jsx';
 import BusinessCard from './pages/BusinessCard.jsx';
 import Features   from './pages/Features.jsx';
 import FeatureRequests from './pages/FeatureRequests.jsx';
@@ -29,7 +30,7 @@ import {
 
 const NAV_TITLES = {
   dashboard: 'Dashboard', invoices: 'Invoice & Kwitansi', 'new-invoice': 'Buat Invoice Baru',
-  'blank-receipt': 'Kwitansi Kosong', 'business-card': 'Cetak Kartu Nama',
+  'blank-receipt': 'Kwitansi Kosong', 'custom-receipt': 'Kwitansi Custom', 'business-card': 'Cetak Kartu Nama',
   customers: 'Data Customer', settings: 'Pengaturan', accounts: 'Daftar Akun',
   features: 'Fitur Tambahan', 'feature-requests': 'Pengajuan Fitur', fleet: 'Armada & Sopir',
   bookings: 'Booking & Kalender', expenses: 'Pengeluaran', reports: 'Laporan & Piutang', backup: 'Backup Data',
@@ -274,6 +275,7 @@ export default function App() {
       case 'settings':    return <Settings settings={settings} setSettings={setSettings} sessionKind={sessionKind} fbUser={fbUser} can={can} />;
       case 'accounts':    return sessionKind === 'master' ? <Accounts /> : null;
       case 'blank-receipt': return <BlankReceipt settings={settings} setPage={setPage} />;
+      case 'custom-receipt': return gate('payments', <CustomReceipt invoices={invoices} setInvoices={setInvoices} settings={settings} setPage={setPage} />);
       case 'business-card': return <BusinessCard settings={settings} setPage={setPage} />;
       case 'features':    return <Features sessionKind={sessionKind} features={features} access={access} setPage={setPage} />;
       case 'feature-requests': return sessionKind === 'master' ? <FeatureRequests onChanged={refreshAdminPending} /> : null;

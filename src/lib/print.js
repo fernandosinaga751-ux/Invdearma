@@ -80,7 +80,7 @@ function buildInvoiceHTML(invoice, settings) {
       </div>
       <div class="badge">
         <div class="title">INVOICE</div>
-        <div class="no">${invoice.invoiceNo}</div>
+        <div class="no">${invoice.kwNo || invoice.invoiceNo}</div>
       </div>
     </div>
 

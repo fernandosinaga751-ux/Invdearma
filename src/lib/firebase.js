@@ -390,7 +390,7 @@ async function buildShareSnapshot(invoice, settings = {}) {
       date: invoice.date || '',
       dueDate: invoice.dueDate || '',
       paidDate: invoice.paidDate || '',
-      payments: (invoice.payments || []).map(p => ({ id: p.id, date: p.date, amount: p.amount, method: p.method || '', note: p.note || '' })),
+      payments: (invoice.payments || []).map(p => ({ id: p.id, date: p.date, amount: p.amount, method: p.method || '', note: p.note || '', label: p.label || '' })),
       rental: invoice.rental?.vehicleId ? {
         vehicleName: invoice.rental.vehicleName || '', plate: invoice.rental.plate || '',
         pickupAt: invoice.rental.pickupAt || '', returnAt: invoice.rental.returnAt || '', days: invoice.rental.days || 0,

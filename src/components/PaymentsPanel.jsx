@@ -84,7 +84,7 @@ export default function PaymentsPanel({ invoice, settings, onSave }) {
             {list.map((p, i) => (
               <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
                 <div>
-                  <div className="font-semibold text-[#0f2544]">Pembayaran ke-{i + 1} · {formatDateID(p.date)}</div>
+                  <div className="font-semibold text-[#0f2544]">{p.label ? `${p.label} (ke-${i + 1})` : `Pembayaran ke-${i + 1}`} · {formatDateID(p.date)}</div>
                   <div className="text-xs text-slate-400">{p.method}{p.note ? ` — ${p.note}` : ''}</div>
                 </div>
                 <div className="flex items-center gap-1.5">

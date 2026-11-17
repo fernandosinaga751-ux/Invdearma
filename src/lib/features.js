@@ -29,12 +29,13 @@ export const FEATURES = [
     ],
   },
   {
-    id: 'payments', emoji: '💳', page: null, requires: [],
+    id: 'payments', emoji: '💳', page: 'custom-receipt', requires: [],
     name: 'Pembayaran Bertahap, Deposit, QRIS & Materai',
     short: 'Catat DP, cicilan, dan pelunasan; kwitansi per pembayaran; deposit/jaminan.',
     points: [
       'Riwayat pembayaran per invoice (tanggal, jumlah, metode) dengan sisa tagihan otomatis',
       'Kwitansi terpisah untuk setiap pembayaran — customer bisa mengunduhnya dari link',
+      'Menu Kwitansi Custom: pilih invoice, catat DP / termin / pelunasan, cetak kwitansi tiap pembayaran',
       'Catatan deposit / jaminan (uang atau barang: KTP, SIM, motor) dan status pengembaliannya',
       'Gambar QRIS di invoice dan ruang materai di kwitansi',
     ],

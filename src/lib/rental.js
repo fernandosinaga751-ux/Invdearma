@@ -104,7 +104,8 @@ export const outstanding = inv => Math.max(0, (inv.total || 0) - paidTotal(inv))
 export const sortedPayments = inv =>
   [...(inv.payments || [])].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
 
-// Susun "invoice" khusus untuk mencetak kwitansi satu pembayaran
+// Susun "invoice" khusus untuk mencetak kwitansi satu pembayaran.
+// `payment.label` (opsional, mis. "DP", "Termin 2", "Pelunasan") dipakai sebagai nama tahap.
 export function paymentKwitansiInvoice(inv, payment) {
   const list = sortedPayments(inv);
   const idx = Math.max(0, list.findIndex(p => p.id === payment.id));
@@ -112,17 +113,26 @@ export function paymentKwitansiInvoice(inv, payment) {
   const after = prior + (Number(payment.amount) || 0);
   const remaining = Math.max(0, (inv.total || 0) - after);
   const final = remaining <= 0;
-  const note = `Pembayaran ke-${idx + 1}${payment.method ? ` (${payment.method})` : ''}${payment.note ? ` — ${payment.note}` : ''}. ` +
+  const stage = payment.label ? `${payment.label} (pembayaran ke-${idx + 1})` : `Pembayaran ke-${idx + 1}`;
+  const note = `${stage}${payment.method ? ` (${payment.method})` : ''}${payment.note ? ` — ${payment.note}` : ''}. ` +
     `Total invoice Rp ${fmt(inv.total)}, sudah dibayar Rp ${fmt(after)}, sisa Rp ${fmt(remaining)}.`;
   return {
     ...inv,
     paidDate: payment.date,
     panjar: 0,
+    kwNo: `${inv.invoiceNo} · Kwt-${idx + 1}`,
     kwNominal: Number(payment.amount) || 0,
     kwMark: final ? 'LUNAS' : 'DITERIMA',
-    kwBadge: final ? 'LUNAS — Bukti Pembayaran Sah' : `Pembayaran Sebagian — Sisa Rp ${fmt(remaining)}`,
+    kwBadge: final ? 'LUNAS — Bukti Pembayaran Sah' : `${payment.label || 'Pembayaran Sebagian'} — Sisa Rp ${fmt(remaining)}`,
     kwNote: note,
   };
+}
+
+// Terapkan daftar pembayaran baru ke invoice → { payments, paidDate } (lunas bila total tercapai)
+export function applyPayments(inv, payments) {
+  const lunas = (inv.total || 0) > 0 && paidTotal({ ...inv, payments }) >= (inv.total || 0);
+  const last = payments.reduce((m, p) => (p.date > m ? p.date : m), '');
+  return { payments, paidDate: lunas ? (last || new Date().toISOString().split('T')[0]) : '' };
 }
 
 // ─── Pengingat dokumen kendaraan ────────────────────────────────
